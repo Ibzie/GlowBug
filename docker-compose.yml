@@ -56,6 +56,11 @@ services:
       TZ: UTC
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -96,7 +101,7 @@ services:
         "--no-sync",
         "taskiq",
         "scheduler",
-        "glowbug.jobs.broker:broker",
+        "glowbug.jobs.scheduler:scheduler",
         "glowbug.jobs.tasks",
       ]
     environment:
