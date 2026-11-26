@@ -16,6 +16,11 @@ uv python install 3.14t
 uv python pin 3.14t
 uv lock
 uv sync --frozen
+
+docker compose up -d db
+uv run alembic upgrade head
+uv run glowbug currency seed
+
 uv run pytest
 ```
 
@@ -27,6 +32,11 @@ uv run uvicorn glowbug.main:app --reload
 
 - `GET /` — service identity
 - `GET /healthz` — health plus whether the GIL is disabled
+- `GET /api/currencies?q=pkr` — search the ISO currency catalog
+- `GET /api/fx/rate?base=EUR&quote=USD&as_of=2026-11-26` — historical rate
+- `GET /api/fx/convert?amount=100&base=EUR&quote=USD` — decimal conversion
+
+Missing exchange rates return `404`; they are never silently treated as `1.0`.
 
 ## Docker
 
