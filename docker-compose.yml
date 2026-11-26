@@ -6,9 +6,9 @@ services:
       POSTGRES_PASSWORD: glowbug
       POSTGRES_DB: glowbug
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U glowbug -d glowbug"]
       interval: 5s

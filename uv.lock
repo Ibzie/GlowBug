@@ -83,6 +83,15 @@ wheels = [
 ]
 
 [[package]]
+name = "aiosqlite"
+version = "0.22.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f17809769d23e518d915db74e6310474e733e3593cfc854ef1/aiosqlite-0.22.1.tar.gz", hash = "sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650", size = 14821, upload-time = "2025-12-23T19:25:43.997Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
+]
+
+[[package]]
 name = "alembic"
 version = "1.20.1"
 source = { registry = "https://pypi.org/simple" }
@@ -214,6 +223,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
+]
+
+[[package]]
+name = "babel"
+version = "2.19.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/44/744169ce3677a541439bc9506ef08bd85674e9d6e3895ebe5a87ff65fb7a/babel-2.19.0.tar.gz", hash = "sha256:fddd2cbbbac7c299af3c2880be23609c331bd94f0912baca6cb0abfe054dfc27", size = 10695455, upload-time = "2026-11-24T20:14:32.427Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/3b/ddf4b07be846bfa361683729b5948c9c61a87fbdf09e69540d8e586bb7c5/babel-2.19.0-py3-none-any.whl", hash = "sha256:6d49734aed1d595b2c065d012174df8c83964692f26fc461702281634dd7555b", size = 10983582, upload-time = "2026-11-24T20:14:30.163Z" },
 ]
 
 [[package]]
@@ -544,6 +562,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "babel" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "itsdangerous" },
@@ -560,6 +579,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "hypothesis" },
     { name = "playwright" },
     { name = "pyright" },
@@ -575,6 +595,7 @@ loadtest = [
 requires-dist = [
     { name = "alembic", specifier = "==1.20.1" },
     { name = "asyncpg", specifier = "==0.32.0" },
+    { name = "babel", specifier = "==2.19.0" },
     { name = "fastapi", specifier = "==0.165.0" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "itsdangerous", specifier = "==2.2.0" },
@@ -591,6 +612,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "aiosqlite", specifier = "==0.22.1" },
     { name = "hypothesis", specifier = "==6.170.17" },
     { name = "playwright", specifier = "==1.65.2" },
     { name = "pyright", specifier = "==1.1.414" },

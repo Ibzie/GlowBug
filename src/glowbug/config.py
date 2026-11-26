@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     app_name: str = "GlowBug"
     app_env: str = "development"
     debug: bool = False
-    secret_key: str = "change-me-in-production"
-    database_url: str = "postgresql+asyncpg://glowbug:glowbug@localhost:5432/glowbug"
+    secret_key: str = "oogabooga"
+    database_url: str = "postgresql+asyncpg://glowbug:glowbug@localhost:55432/glowbug"
     redis_url: str = "redis://localhost:6379/0"
     timezone: str = "UTC"
 

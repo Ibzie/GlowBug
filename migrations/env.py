@@ -8,6 +8,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import glowbug.models  # noqa: F401
 from glowbug.config import get_settings
 from glowbug.db.base import Base
 
