@@ -1,0 +1,35 @@
+# Local reference only; never ship Firefly III with GlowBug.
+/firefly-iii/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+htmlcov/
+
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+build/
+
+# Runtime
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.db
+media/
+backups/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

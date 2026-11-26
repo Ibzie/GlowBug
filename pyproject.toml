@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling==1.33.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "glowbug"
+version = "0.1.0"
+description = "A personal finance manager focused on multi-currency dashboards."
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Ibzie" }]
+
+dependencies = [
+    "fastapi==0.165.0",
+    "uvicorn[standard]==0.54.0",
+    "sqlalchemy[asyncio]==2.1.9",
+    "asyncpg==0.32.0",
+    "alembic==1.20.1",
+    "pydantic==2.14.4",
+    "pydantic-settings==2.16.3",
+    "jinja2==3.1.6",
+    "python-multipart==0.0.34",
+    "itsdangerous==2.2.0",
+    "pwdlib[argon2]==0.4.2",
+    "httpx==0.28.1",
+    "taskiq==0.13.0",
+    "taskiq-redis==1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "hypothesis==6.170.17",
+    "playwright==1.65.2",
+    "ruff==0.17.6",
+    "pyright==1.1.414",
+]
+loadtest = ["locust==2.47.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/glowbug"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+include = ["src", "tests"]
+
+[tool.uv]
+python-preference = "only-managed"

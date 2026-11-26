@@ -1,0 +1,100 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: glowbug
+      POSTGRES_PASSWORD: glowbug
+      POSTGRES_DB: glowbug
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glowbug -d glowbug"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      SECRET_KEY: change-me-in-production
+      DATABASE_URL: postgresql+asyncpg://glowbug:glowbug@db:5432/glowbug
+      REDIS_URL: redis://redis:6379/0
+      TZ: UTC
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command:
+      [
+        "uv",
+        "run",
+        "--no-sync",
+        "taskiq",
+        "worker",
+        "glowbug.jobs.broker:broker",
+        "glowbug.jobs.tasks",
+      ]
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      SECRET_KEY: change-me-in-production
+      DATABASE_URL: postgresql+asyncpg://glowbug:glowbug@db:5432/glowbug
+      REDIS_URL: redis://redis:6379/0
+      TZ: UTC
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command:
+      [
+        "uv",
+        "run",
+        "--no-sync",
+        "taskiq",
+        "scheduler",
+        "glowbug.jobs.broker:broker",
+        "glowbug.jobs.tasks",
+      ]
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      SECRET_KEY: change-me-in-production
+      DATABASE_URL: postgresql+asyncpg://glowbug:glowbug@db:5432/glowbug
+      REDIS_URL: redis://redis:6379/0
+      TZ: UTC
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
