@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Dashboard</p>
+            <h1>Hi, {{ user.display_name }}.</h1>
+            <p class="muted">A first look at your money in {{ data.primary_currency.code }}{% if data.secondary_currency %} and {{ data.secondary_currency.code }}{% endif %}.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn-secondary" href="/settings/currencies">Currencies</a>
+            <a class="btn" href="/accounts/new">Add account</a>
+        </div>
+    </div>
+
+    {% if data.warnings %}
+        <div class="flash flash-warning">
+            {% for warning in data.warnings %}
+                <div>{{ warning }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="stat-grid">
+        <div class="stat">
+            <span class="stat-label">Net worth · {{ data.primary_currency.code }}</span>
+            {% if data.net_primary_complete %}
+                <strong class="stat-value">{{ format_money(data.net_primary, data.primary_currency.code, user.locale) }}</strong>
+            {% else %}
+                <strong class="stat-value muted">Incomplete — missing rate</strong>
+            {% endif %}
+        </div>
+        {% if data.secondary_currency and data.net_secondary is not none %}
+            <div class="stat stat-alt">
+                <span class="stat-label">Net worth · {{ data.secondary_currency.code }}</span>
+                {% if data.net_secondary_complete %}
+                    <strong class="stat-value">{{ format_money(data.net_secondary, data.secondary_currency.code, user.locale) }}</strong>
+                {% else %}
+                    <strong class="stat-value muted">Incomplete — missing rate</strong>
+                {% endif %}
+            </div>
+        {% endif %}
+        <div class="stat">
+            <span class="stat-label">Accounts</span>
+            <strong class="stat-value">{{ data.accounts | length }}</strong>
+        </div>
+    </div>
+
+    <div class="section-heading row-between">
+        <div>
+            <h2>Accounts</h2>
+            <p class="muted">Native balances, with primary{% if data.secondary_currency %} and secondary{% endif %} conversions.</p>
+        </div>
+        <a class="text-link" href="/accounts">View all</a>
+    </div>
+
+    {% if data.accounts %}
+        <div class="card-grid">
+            {% for view in data.accounts %}
+                <article class="card account-card">
+                    <div class="row-between">
+                        <h3>{{ view.account.name }}</h3>
+                        <span class="badge">{{ view.account.type }}</span>
+                    </div>
+                    <p class="amount">{{ format_money(view.native_balance, view.account.currency_code, user.locale) }}</p>
+                    <dl class="conversions">
+                        {% if view.primary_balance is not none %}
+                            <div>
+                                <dt>{{ data.primary_currency.code }}</dt>
+                                <dd>{{ format_money(view.primary_balance, data.primary_currency.code, user.locale) }}</dd>
+                            </div>
+                        {% endif %}
+                        {% if data.secondary_currency and view.secondary_balance is not none %}
+                            <div>
+                                <dt>{{ data.secondary_currency.code }}</dt>
+                                <dd>{{ format_money(view.secondary_balance, data.secondary_currency.code, user.locale) }}</dd>
+                            </div>
+                        {% endif %}
+                    </dl>
+                    {% if view.warning %}
+                        <p class="warning-text">{{ view.warning }}</p>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card empty">
+            <p>No accounts yet.</p>
+            <a class="btn" href="/accounts/new">Add your first account</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

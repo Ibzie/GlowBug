@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Add account · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Accounts</p>
+        <h1>Add an account</h1>
+    </div>
+
+    <form method="post" action="/accounts" class="card form">
+        <label class="field">
+            <span>Name</span>
+            <input type="text" name="name" value="{{ values.name or '' }}" required autofocus>
+        </label>
+        <div class="form-grid">
+            <label class="field">
+                <span>Type</span>
+                <select name="type">
+                    {% for value, label in account_types %}
+                        <option value="{{ value }}" {% if values.type == value or (not values.type and value == 'asset') %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Currency</span>
+                <select name="currency">
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if values.currency == currency.code or (not values.currency and currency.code == primary_code) %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }} ({{ currency.symbol }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Opening balance</span>
+                <input type="text" name="opening_balance" inputmode="decimal" value="{{ values.opening_balance or '0' }}">
+            </label>
+        </div>
+        <div class="actions">
+            <a class="btn btn-ghost" href="/accounts">Cancel</a>
+            <button class="btn" type="submit">Create account</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

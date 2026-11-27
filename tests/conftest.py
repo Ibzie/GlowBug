@@ -1,11 +1,15 @@
 from collections.abc import AsyncIterator
 
+import httpx
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 import glowbug.models  # noqa: F401
 from glowbug.db.base import Base
+from glowbug.db.session import get_session
+from glowbug.main import app
+from glowbug.services.currency.catalog import seed_iso_currencies
 
 
 @pytest_asyncio.fixture
@@ -24,3 +28,18 @@ async def session() -> AsyncIterator[AsyncSession]:
         yield session
 
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(session: AsyncSession) -> AsyncIterator[httpx.AsyncClient]:
+    await seed_iso_currencies(session)
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    app.dependency_overrides.clear()

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Currencies · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero">
+        <p class="eyebrow">Settings</p>
+        <h1>Currencies</h1>
+        <p class="muted">
+            Enable any ISO 4217 currency, then choose the primary and secondary currencies
+            used across your dashboard.
+        </p>
+    </div>
+
+    <form method="post" action="/settings/currencies" class="card form">
+        <div class="form-grid">
+            <label class="field">
+                <span>Primary currency</span>
+                <select name="primary_currency" id="primary_currency" required>
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if primary_code == currency.code %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }} ({{ currency.symbol }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Secondary currency <span class="muted">(optional)</span></span>
+                <select name="secondary_currency" id="secondary_currency">
+                    <option value="">None</option>
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if secondary_code == currency.code %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }} ({{ currency.symbol }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="section-heading">
+            <h2>Enabled currencies</h2>
+            <p class="muted">These are available when creating accounts and filtering widgets.</p>
+        </div>
+
+        <label class="field">
+            <span>Search currencies</span>
+            <input type="search" data-currency-search data-currency-target=".currency-list" placeholder="Try PKR, rupee, ₨, USD…">
+        </label>
+
+        <div class="currency-list" data-currency-list>
+            {% for currency in currencies %}
+                <label class="currency-row" data-currency-row data-search-text="{{ currency.code }} {{ currency.name }} {{ currency.symbol }}">
+                    <input type="checkbox" name="enabled_currencies" value="{{ currency.code }}" {% if currency.code in enabled_codes %}checked{% endif %}>
+                    <span class="currency-code">{{ currency.code }}</span>
+                    <span>{{ currency.name }}</span>
+                    <span class="muted">{{ currency.symbol }}</span>
+                </label>
+            {% endfor %}
+        </div>
+
+        <div class="actions">
+            <a class="btn btn-ghost" href="/">Cancel</a>
+            <button class="btn" type="submit">Save currencies</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

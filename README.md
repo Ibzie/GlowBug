@@ -30,13 +30,19 @@ Start the development server:
 uv run uvicorn glowbug.main:app --reload
 ```
 
-- `GET /` — service identity
+Open [http://localhost:8000](http://localhost:8000) for the first-run setup:
+
+1. Create your local account and pick a primary currency (and an optional secondary).
+2. Add your first bank, cash, or savings accounts with opening balances.
+3. The dashboard shows native balances and converts them to your primary and secondary currencies.
+
 - `GET /healthz` — health plus whether the GIL is disabled
 - `GET /api/currencies?q=pkr` — search the ISO currency catalog
 - `GET /api/fx/rate?base=EUR&quote=USD&as_of=2026-11-26` — historical rate
 - `GET /api/fx/convert?amount=100&base=EUR&quote=USD` — decimal conversion
 
-Missing exchange rates return `404`; they are never silently treated as `1.0`.
+Missing exchange rates return `404` or an explicit “Incomplete — missing rate”
+label. They are never silently treated as `1.0`.
 
 ## Docker
 

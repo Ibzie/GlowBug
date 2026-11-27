@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Add accounts · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero">
+        <p class="eyebrow">Step 2 of 2</p>
+        <h1>Add your first accounts</h1>
+        <p class="muted">
+            Opening balances are optional. You can add more accounts and currencies later.
+        </p>
+    </div>
+
+    <form method="post" action="/setup/accounts" class="card form">
+        <div id="account-rows" class="stack">
+            {% for row in rows %}
+                <div class="account-row">
+                    <label class="field grow">
+                        <span>Name</span>
+                        <input type="text" name="account_name" value="{{ row.name }}">
+                    </label>
+                    <label class="field">
+                        <span>Type</span>
+                        <select name="account_type">
+                            {% for value, label in account_types %}
+                                <option value="{{ value }}" {% if row.type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Currency</span>
+                        <select name="account_currency">
+                            {% for currency in currencies %}
+                                <option value="{{ currency.code }}" {% if row.currency == currency.code %}selected{% endif %}>
+                                    {{ currency.code }} — {{ currency.symbol }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Opening balance</span>
+                        <input type="text" name="account_opening_balance" inputmode="decimal" value="{{ row.opening_balance }}">
+                    </label>
+                    <button type="button" class="btn btn-ghost remove-account" data-remove-account aria-label="Remove account">Remove</button>
+                </div>
+            {% endfor %}
+        </div>
+
+        <template id="account-row-template">
+            <div class="account-row">
+                <label class="field grow">
+                    <span>Name</span>
+                    <input type="text" name="account_name" value="">
+                </label>
+                <label class="field">
+                    <span>Type</span>
+                    <select name="account_type">
+                        {% for value, label in account_types %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Currency</span>
+                    <select name="account_currency">
+                        {% for currency in currencies %}
+                            <option value="{{ currency.code }}">{{ currency.code }} — {{ currency.symbol }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Opening balance</span>
+                    <input type="text" name="account_opening_balance" inputmode="decimal" value="0">
+                </label>
+                <button type="button" class="btn btn-ghost remove-account" data-remove-account aria-label="Remove account">Remove</button>
+            </div>
+        </template>
+
+        <div class="actions spread">
+            <button type="button" class="btn btn-secondary" data-add-account>Add another account</button>
+            <button class="btn" type="submit">Finish setup</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

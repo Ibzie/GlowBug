@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}GlowBug{% endblock %}</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" href="/">GlowBug</a>
+    {% if user is defined and user %}
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/accounts">Accounts</a>
+            <a href="/settings/currencies">Currencies</a>
+            <form method="post" action="/logout" class="inline-form">
+                <button type="submit" class="link-button">Log out</button>
+            </form>
+        </nav>
+    {% endif %}
+</header>
+
+<main class="container">
+    {% for flash in flashes %}
+        <div class="flash flash-{{ flash.category }}">{{ flash.message }}</div>
+    {% endfor %}
+
+    {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</main>
+
+<script src="{{ request.url_for('static', path='app.js') }}"></script>
+</body>
+</html>

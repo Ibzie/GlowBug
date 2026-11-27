@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Set up GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">First run</p>
+        <h1>Create your GlowBug account</h1>
+        <p class="muted">
+            Choose how you want to see your money. Every ISO 4217 currency is available,
+            and you can add more later.
+        </p>
+    </div>
+
+    <form method="post" action="/setup" class="card form">
+        <div class="form-grid">
+            <label class="field">
+                <span>Email</span>
+                <input type="email" name="email" value="{{ values.email or '' }}" autocomplete="username" required>
+            </label>
+            <label class="field">
+                <span>Display name</span>
+                <input type="text" name="display_name" value="{{ values.display_name or '' }}" required>
+            </label>
+            <label class="field">
+                <span>Password</span>
+                <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+            </label>
+            <label class="field">
+                <span>Confirm password</span>
+                <input type="password" name="password_confirm" autocomplete="new-password" minlength="8" required>
+            </label>
+            <label class="field">
+                <span>Timezone</span>
+                <input type="text" name="timezone" value="{{ values.timezone or 'UTC' }}" placeholder="Europe/Berlin" required>
+            </label>
+            <label class="field">
+                <span>Locale</span>
+                <input type="text" name="locale" value="{{ values.locale or 'en_US' }}" placeholder="en_US" required>
+            </label>
+        </div>
+
+        <div class="section-heading">
+            <h2>Currencies</h2>
+            <p class="muted">Search by code, name, or symbol.</p>
+        </div>
+
+        <label class="field">
+            <span>Find a currency</span>
+            <input type="search" data-currency-search data-currency-target="#primary_currency,#secondary_currency"
+                   placeholder="Try PKR, rupee, ₨, USD…">
+        </label>
+
+        <div class="form-grid">
+            <label class="field">
+                <span>Primary currency</span>
+                <select name="primary_currency" id="primary_currency" required>
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if values.primary_currency == currency.code or (not values.primary_currency and currency.code == 'USD') %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }} ({{ currency.symbol }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Secondary currency <span class="muted">(optional)</span></span>
+                <select name="secondary_currency" id="secondary_currency">
+                    <option value="">None</option>
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if values.secondary_currency == currency.code %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }} ({{ currency.symbol }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="actions">
+            <button class="btn" type="submit">Continue</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Accounts · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Accounts</p>
+            <h1>Your accounts</h1>
+            <p class="muted">Balances are shown in the account currency and converted to your primary currency.</p>
+        </div>
+        <a class="btn" href="/accounts/new">Add account</a>
+    </div>
+
+    {% if data.warnings %}
+        <div class="flash flash-warning">
+            {% for warning in data.warnings %}
+                <div>{{ warning }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card table-card">
+        <table>
+            <thead>
+            <tr>
+                <th>Account</th>
+                <th>Type</th>
+                <th class="right">Native balance</th>
+                <th class="right">{{ data.primary_currency.code }}</th>
+                {% if data.secondary_currency %}
+                    <th class="right">{{ data.secondary_currency.code }}</th>
+                {% endif %}
+            </tr>
+            </thead>
+            <tbody>
+            {% for view in data.accounts %}
+                <tr>
+                    <td>
+                        <strong>{{ view.account.name }}</strong>
+                        {% if view.warning %}<div class="warning-text">{{ view.warning }}</div>{% endif %}
+                    </td>
+                    <td><span class="badge">{{ view.account.type }}</span></td>
+                    <td class="right">{{ format_money(view.native_balance, view.account.currency_code, user.locale) }}</td>
+                    <td class="right">
+                        {% if view.primary_balance is not none %}
+                            {{ format_money(view.primary_balance, data.primary_currency.code, user.locale) }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    {% if data.secondary_currency %}
+                        <td class="right">
+                            {% if view.secondary_balance is not none %}
+                                {{ format_money(view.secondary_balance, data.secondary_currency.code, user.locale) }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
