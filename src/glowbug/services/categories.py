@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from uuid import UUID
 
@@ -31,11 +30,9 @@ DEFAULT_CATEGORIES: list[tuple[str, str]] = [
     ("Other", "#98a2b3"),
 ]
 
-_SPACES = re.compile(r"\s+")
-
 
 def normalize_category_name(name: str) -> str:
-    return _SPACES.sub(" ", name.strip().lower())
+    return " ".join(name.strip().lower().split())
 
 
 async def seed_default_categories(session: AsyncSession, user: User) -> int:
