@@ -12,6 +12,7 @@ from glowbug.services.subscriptions import (
     add_months,
     create_subscription,
     detect_candidates,
+    dismiss_candidate,
     list_subscriptions,
 )
 from glowbug.services.transactions import create_transaction
@@ -119,6 +120,48 @@ async def test_detect_and_register_subscription(session: AsyncSession) -> None:
 
     assert await detect_candidates(session, user) == []
     assert len(await list_subscriptions(session, user)) == 1
+
+
+async def test_dismissed_candidate_is_hidden_and_not_listed(session: AsyncSession) -> None:
+    user = await make_user(session)
+    bank = await create_account(
+        session,
+        user,
+        account_type=AccountType.ASSET,
+        name="Bank",
+        currency_code="USD",
+    )
+    start = date(2026, 1, 15)
+    for index in range(3):
+        await create_transaction(
+            session,
+            user,
+            transaction_type="withdrawal",
+            journal_date=add_months(start, index),
+            description="SPOTIFY",
+            amount=Decimal("9.99"),
+            currency_code="USD",
+            account_id=bank.id,
+        )
+
+    candidates = await detect_candidates(session, user)
+    assert len(candidates) == 1
+    candidate = candidates[0]
+
+    await dismiss_candidate(
+        session,
+        user,
+        name=candidate.name,
+        merchant_key=candidate.merchant_key,
+        amount=candidate.amount,
+        currency_code=candidate.currency_code,
+        frequency=candidate.frequency,
+        next_due_date=candidate.next_due_date,
+    )
+    await session.commit()
+
+    assert await detect_candidates(session, user) == []
+    assert await list_subscriptions(session, user) == []
 
 
 async def test_irregular_amounts_are_not_detected(session: AsyncSession) -> None:

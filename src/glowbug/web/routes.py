@@ -404,7 +404,13 @@ async def dashboard(request: Request, session: SessionDep) -> HTMLResponse | Red
         return RedirectResponse("/setup/accounts", status_code=303)
 
     dashboard = await get_or_create_default_dashboard(session, user)
-    range_key = request.query_params.get("range", "6M").upper()
+    requested_range = request.query_params.get("range")
+    if requested_range is not None:
+        range_key = requested_range.upper()
+        if range_key in VALID_RANGES:
+            request.session["dashboard_range"] = range_key
+    else:
+        range_key = str(request.session.get("dashboard_range", "6M")).upper()
     if range_key not in VALID_RANGES:
         range_key = "6M"
     start, end = default_range(user, range_key)

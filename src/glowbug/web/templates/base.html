@@ -3,50 +3,90 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d0b08" media="(prefers-color-scheme: dark)">
     <title>{% block title %}GlowBug{% endblock %}</title>
-    <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}?v={{ static_version }}">
     {% block head %}{% endblock %}
 </head>
 <body>
-<header class="topbar">
-    <a class="brand" href="/">GlowBug</a>
-    {% if user is defined and user %}
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/transactions">Transactions</a>
-            <a href="/savings">Savings</a>
-            <a href="/income">Income</a>
-            <a href="/subscriptions">Subscriptions</a>
-            <a href="/accounts">Accounts</a>
-            <a href="/categories">Categories</a>
-            <a href="/taxes">Taxes</a>
-            <a href="/settings/currencies">Currencies</a>
-            <form method="post" action="/logout" class="inline-form">
-                <button type="submit" class="link-button">Log out</button>
-            </form>
+<a class="skip-link" href="#main">Skip to content</a>
+{% set nav_items = [
+    ("/", "dashboard", "Dashboard"),
+    ("/transactions", "transactions", "Transactions"),
+    ("/savings", "savings", "Savings"),
+    ("/income", "income", "Income"),
+    ("/subscriptions", "subscriptions", "Subscriptions"),
+    ("/accounts", "accounts", "Accounts"),
+    ("/categories", "categories", "Categories"),
+    ("/taxes", "taxes", "Taxes"),
+    ("/settings/currencies", "currencies", "Currencies"),
+] %}
+{% set authed = user is defined and user %}
+
+{% if authed %}
+<div class="shell">
+    <aside class="sidebar">
+        <a class="brand" href="/" translate="no"><span class="brand-mark" aria-hidden="true"></span>GlowBug</a>
+        <nav class="side-nav" aria-label="Main">
+            {% for href, icon_name, label in nav_items %}
+                {% set current = request.url.path == href if href == "/" else request.url.path.startswith(href) %}
+                <a href="{{ href }}" aria-label="{{ label }}" {% if current %}class="active" aria-current="page"{% endif %}>
+                    {{ icon(icon_name) }}<span>{{ label }}</span>
+                </a>
+            {% endfor %}
         </nav>
-    {% endif %}
-</header>
+        <div class="sidebar-foot">
+            <div class="sidebar-user">
+                <span class="sidebar-avatar" aria-hidden="true">{{ (user.display_name or user.email)[0] | upper }}</span>
+                <span class="sidebar-username">{{ user.display_name or user.email }}</span>
+            </div>
+            <form method="post" action="/logout" class="inline-form">
+                <button type="submit" class="sidebar-logout" aria-label="Log out">{{ icon("logout") }}<span>Log out</span></button>
+            </form>
+        </div>
+    </aside>
+{% endif %}
 
-<main class="container">
-    {% for flash in flashes %}
-        <div class="flash flash-{{ flash.category }}">{{ flash.message }}</div>
-    {% endfor %}
+    <main class="container{% if not authed %} auth-container{% endif %}" id="main">
+        {% if not authed %}
+            <a class="brand auth-brand" href="/" translate="no"><span class="brand-mark" aria-hidden="true"></span>GlowBug</a>
+        {% endif %}
 
-    {% if error %}
-        <div class="flash flash-error">{{ error }}</div>
-    {% endif %}
+        {% set flash_icons = {"success": "check-circle", "error": "alert", "warning": "alert", "info": "info"} %}
+        {% for flash in flashes %}
+            <div class="flash flash-{{ flash.category }}" role="alert">
+                {{ icon(flash_icons.get(flash.category, "info")) }}
+                <span>{{ flash.message }}</span>
+                <button type="button" class="flash-close" data-flash-close aria-label="Dismiss">{{ icon("x") }}</button>
+            </div>
+        {% endfor %}
 
-    {% block content %}{% endblock %}
+        {% if error %}
+            <div class="flash flash-error" role="alert">
+                {{ icon("alert") }}
+                <span>{{ error }}</span>
+                <button type="button" class="flash-close" data-flash-close aria-label="Dismiss">{{ icon("x") }}</button>
+            </div>
+        {% endif %}
 
-    {% if last_fx_sync is defined and last_fx_sync %}
-        <footer class="footer-note">
-            Exchange rates: Frankfurter · last sync {{ last_fx_sync.strftime("%d %b %Y %H:%M UTC") }}
-        </footer>
-    {% endif %}
-</main>
+        {% block content %}{% endblock %}
 
-<script src="{{ request.url_for('static', path='app.js') }}"></script>
+        {% if authed and last_fx_sync is defined and last_fx_sync %}
+            <footer class="footer-note">
+                Exchange rates: Frankfurter · last sync {{ last_fx_sync.strftime("%d %b %Y %H:%M UTC") }}
+            </footer>
+        {% endif %}
+    </main>
+
+{% if authed %}
+</div>
+{% endif %}
+
+<script src="{{ request.url_for('static', path='app.js') }}?v={{ static_version }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

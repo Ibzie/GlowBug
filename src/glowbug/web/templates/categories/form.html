@@ -18,7 +18,7 @@
         </label>
         <div class="actions">
             <a class="btn btn-ghost" href="/categories">Cancel</a>
-            <button class="btn" type="submit">{% if category %}Save category{% else %}Create category{% endif %}</button>
+            <button class="btn" type="submit">{{ icon("check") }}{% if category %}Save category{% else %}Create category{% endif %}</button>
         </div>
     </form>
 </div>

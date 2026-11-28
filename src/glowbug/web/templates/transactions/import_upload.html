@@ -43,13 +43,14 @@
             </p>
             <div class="actions">
                 <a class="btn btn-ghost" href="/transactions">Cancel</a>
-                <button class="btn" type="submit">Upload statement</button>
+                <button class="btn" type="submit">{{ icon("upload") }}Upload statement</button>
             </div>
         </form>
     {% else %}
         <div class="card empty">
+            {{ icon("accounts") }}
             <p>Add an active bank, cash, or savings account before importing a statement.</p>
-            <a class="btn" href="/accounts/new">Add an account</a>
+            <a class="btn" href="/accounts/new">{{ icon("plus") }}Add an account</a>
         </div>
     {% endif %}
 </div>

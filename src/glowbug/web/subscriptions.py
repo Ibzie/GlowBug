@@ -16,6 +16,7 @@ from glowbug.services.subscriptions import (
     FREQUENCIES,
     create_subscription,
     delete_subscription,
+    dismiss_candidate,
     get_subscription,
     list_subscriptions,
     update_subscription,
@@ -173,6 +174,46 @@ async def subscription_from_candidate(
 
     flash(request, "Subscription created." if created else "This subscription is already registered.", "success")
     return RedirectResponse("/subscriptions", status_code=303)
+
+
+@router.post("/subscriptions/dismiss-candidate", response_model=None)
+async def subscription_dismiss_candidate(
+    request: Request,
+    session: SessionDep,
+) -> RedirectResponse:
+    user = await get_session_user(request, session)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+
+    form = await request.form()
+    amount = parse_decimal(str(form.get("amount", "")))
+    merchant_key = str(form.get("merchant_key", "")) or None
+    try:
+        next_due_date = date.fromisoformat(str(form.get("next_due_date", "")))
+    except ValueError:
+        next_due_date = None
+    if amount is None or next_due_date is None or merchant_key is None:
+        flash(request, "The subscription candidate was invalid.", "error")
+        return RedirectResponse("/transactions", status_code=303)
+
+    try:
+        await dismiss_candidate(
+            session,
+            user,
+            name=str(form.get("name", "")),
+            merchant_key=merchant_key,
+            amount=amount,
+            currency_code=str(form.get("currency_code", "")).upper(),
+            frequency=str(form.get("frequency", "monthly")),
+            next_due_date=next_due_date,
+        )
+        await session.commit()
+    except ValueError as exc:
+        flash(request, str(exc), "error")
+        return RedirectResponse("/transactions", status_code=303)
+
+    flash(request, "Suggestion dismissed. It won't be offered again.", "success")
+    return RedirectResponse("/transactions", status_code=303)
 
 
 @router.get("/subscriptions/{subscription_id}/edit", response_class=HTMLResponse, response_model=None)

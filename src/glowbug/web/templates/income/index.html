@@ -15,18 +15,18 @@
             <form method="post" action="/income/apply-due" class="inline-form">
                 <button type="submit" class="btn btn-secondary">Apply due income</button>
             </form>
-            <a class="btn" href="/income/new">New income schedule</a>
+            <a class="btn" href="/income/new">{{ icon("plus") }}New income schedule</a>
         </div>
     </div>
 
     {% if summary.currency_code %}
         <div class="stat-grid">
             <div class="stat">
-                <span class="stat-label">Scheduled monthly income · {{ summary.currency_code }}</span>
+                <span class="stat-label">{{ icon("income") }}Scheduled monthly income · {{ summary.currency_code }}</span>
                 <strong class="stat-value">{{ format_money(summary.monthly_total, summary.currency_code, user.locale) }}</strong>
             </div>
             <div class="stat">
-                <span class="stat-label">Active schedules</span>
+                <span class="stat-label">{{ icon("check-circle") }}Active schedules</span>
                 <strong class="stat-value">{{ views | selectattr('schedule.active') | list | length }}</strong>
             </div>
         </div>
@@ -58,7 +58,7 @@
                 <tr>
                     <td>
                         <strong>{{ view.schedule.name }}</strong>
-                        {% if not view.schedule.active %}<span class="badge">paused</span>{% endif %}
+                        {% if not view.schedule.active %}<span class="badge badge-warning">paused</span>{% endif %}
                         {% if view.schedule.end_date %}
                             <div class="muted small">Ends {{ view.schedule.end_date }}</div>
                         {% endif %}
@@ -79,7 +79,7 @@
             {% endfor %}
             {% if not views %}
                 <tr>
-                    <td colspan="7" class="empty">No recurring income yet.</td>
+                    <td colspan="7" class="empty">{{ icon("income") }}<p>No recurring income yet.</p></td>
                 </tr>
             {% endif %}
             </tbody>

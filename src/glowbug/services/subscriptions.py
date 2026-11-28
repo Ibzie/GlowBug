@@ -191,7 +191,10 @@ async def detect_candidates(
 async def list_subscriptions(session: AsyncSession, user: User) -> list[Subscription]:
     statement = (
         select(Subscription)
-        .where(Subscription.user_id == user.id)
+        .where(
+            Subscription.user_id == user.id,
+            Subscription.source != "dismissed",
+        )
         .options(
             selectinload(Subscription.account),
             selectinload(Subscription.category),
@@ -199,6 +202,35 @@ async def list_subscriptions(session: AsyncSession, user: User) -> list[Subscrip
         .order_by(Subscription.active.desc(), Subscription.next_due_date)
     )
     return list(await session.scalars(statement))
+
+
+async def dismiss_candidate(
+    session: AsyncSession,
+    user: User,
+    *,
+    name: str,
+    merchant_key: str | None,
+    amount: Decimal,
+    currency_code: str,
+    frequency: str,
+    next_due_date: date,
+) -> None:
+    if not merchant_key:
+        raise ValueError("The subscription candidate was invalid.")
+    subscription, _created = await create_subscription(
+        session,
+        user,
+        name=name or "Dismissed candidate",
+        amount=amount,
+        currency_code=currency_code,
+        frequency=frequency,
+        next_due_date=next_due_date,
+        merchant_key=merchant_key,
+        source="dismissed",
+    )
+    if subscription is not None:
+        subscription.active = False
+    await session.flush()
 
 
 async def get_subscription(

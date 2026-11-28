@@ -8,7 +8,7 @@
             <h1>Your accounts</h1>
             <p class="muted">Balances are shown in the account currency and converted to your primary currency.</p>
         </div>
-        <a class="btn" href="/accounts/new">Add account</a>
+        <a class="btn" href="/accounts/new">{{ icon("plus") }}Add account</a>
     </div>
 
     {% if data.warnings %}
@@ -39,7 +39,7 @@
                         <strong>{{ view.account.name }}</strong>
                         {% if view.warning %}<div class="warning-text">{{ view.warning }}</div>{% endif %}
                     </td>
-                    <td><span class="badge">{{ view.account.type }}</span></td>
+                    <td><span class="badge badge-accent">{{ view.account.type }}</span></td>
                     <td class="right">{{ format_money(view.native_balance, view.account.currency_code, user.locale) }}</td>
                     <td class="right">
                         {% if view.primary_balance is not none %}

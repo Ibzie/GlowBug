@@ -58,7 +58,7 @@
 
         <div class="actions">
             <a class="btn btn-ghost" href="/taxes?year={{ values.tax_year or 2026 }}">Cancel</a>
-            <button class="btn" type="submit">{% if profile %}Save tax profile{% else %}Create tax profile{% endif %}</button>
+            <button class="btn" type="submit">{{ icon("check") }}{% if profile %}Save tax profile{% else %}Create tax profile{% endif %}</button>
         </div>
     </form>
 </div>

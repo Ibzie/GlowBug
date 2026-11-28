@@ -2,7 +2,7 @@
 {% block title %}Dashboard · GlowBug{% endblock %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/build/dashboard.css">
+    <link rel="stylesheet" href="/static/build/dashboard.css?v={{ static_version }}">
 {% endblock %}
 
 {% block content %}
@@ -67,8 +67,9 @@
         </div>
     {% else %}
         <div class="card empty" id="dashboard-empty">
+            {{ icon("dashboard") }}
             <p>No widgets yet.</p>
-            <button type="button" class="btn" id="dashboard-empty-add">Add your first widget</button>
+            <button type="button" class="btn" id="dashboard-empty-add">{{ icon("plus") }}Add your first widget</button>
         </div>
     {% endif %}
 </div>
@@ -77,7 +78,7 @@
     <form method="dialog" class="dialog-form" id="add-widget-form">
         <header class="dialog-header">
             <h2>Add widget</h2>
-            <button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button>
+            <button type="button" class="dialog-close" data-close-dialog aria-label="Close">{{ icon("x") }}</button>
         </header>
 
         <label class="field">
@@ -122,7 +123,7 @@
     <form method="dialog" class="dialog-form" id="edit-widget-form">
         <header class="dialog-header">
             <h2>Widget settings</h2>
-            <button type="button" class="dialog-close" data-close-dialog aria-label="Close">×</button>
+            <button type="button" class="dialog-close" data-close-dialog aria-label="Close">{{ icon("x") }}</button>
         </header>
 
         <input type="hidden" id="edit-widget-id">
@@ -162,5 +163,5 @@
 {% endblock %}
 
 {% block scripts %}
-    <script type="module" src="/static/build/dashboard.js"></script>
+    <script type="module" src="/static/build/dashboard.js?v={{ static_version }}"></script>
 {% endblock %}

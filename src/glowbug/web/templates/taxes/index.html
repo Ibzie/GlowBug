@@ -18,26 +18,26 @@
                     {% endfor %}
                 </select>
             </form>
-            <a class="btn" href="/taxes/profiles/new?year={{ year }}">New tax profile</a>
+            <a class="btn" href="/taxes/profiles/new?year={{ year }}">{{ icon("plus") }}New tax profile</a>
         </div>
     </div>
 
     {% if summary.primary_currency %}
         <div class="stat-grid">
             <div class="stat">
-                <span class="stat-label">Taxable income · {{ summary.primary_currency.code }}</span>
+                <span class="stat-label">{{ icon("income") }}Taxable income · {{ summary.primary_currency.code }}</span>
                 <strong class="stat-value">{{ format_money(summary.taxable_income, summary.primary_currency.code, user.locale) }}</strong>
             </div>
             <div class="stat stat-alt">
-                <span class="stat-label">Estimated tax · {{ summary.primary_currency.code }}</span>
+                <span class="stat-label">{{ icon("taxes") }}Estimated tax · {{ summary.primary_currency.code }}</span>
                 <strong class="stat-value">{{ format_money(summary.estimated_tax, summary.primary_currency.code, user.locale) }}</strong>
             </div>
             <div class="stat">
-                <span class="stat-label">Paid</span>
+                <span class="stat-label">{{ icon("check-circle") }}Paid</span>
                 <strong class="stat-value">{{ format_money(summary.paid, summary.primary_currency.code, user.locale) }}</strong>
             </div>
             <div class="stat">
-                <span class="stat-label">Remaining</span>
+                <span class="stat-label">{{ icon("alert") }}Remaining</span>
                 <strong class="stat-value">{{ format_money(summary.remaining, summary.primary_currency.code, user.locale) }}</strong>
             </div>
         </div>
@@ -64,7 +64,7 @@
                             <h2>{{ item.profile.name }}</h2>
                             <p class="muted small">
                                 {{ item.profile.rate }}% · {{ item.profile.currency_code }} · {{ item.profile.tax_year }}
-                                {% if not item.profile.is_active %}<span class="badge">paused</span>{% endif %}
+                                {% if not item.profile.is_active %}<span class="badge badge-warning">paused</span>{% endif %}
                             </p>
                         </div>
                         <div class="actions">
@@ -152,8 +152,9 @@
         </div>
     {% else %}
         <div class="card empty">
+            {{ icon("taxes") }}
             <p>No tax profiles for {{ year }} yet.</p>
-            <a class="btn" href="/taxes/profiles/new?year={{ year }}">Create your first tax profile</a>
+            <a class="btn" href="/taxes/profiles/new?year={{ year }}">{{ icon("plus") }}Create your first tax profile</a>
         </div>
     {% endif %}
 </div>

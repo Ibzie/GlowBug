@@ -544,3 +544,64 @@ async def test_savings_and_income_pages(client: httpx.AsyncClient, session: Asyn
     page = await client.get("/income/new")
     assert page.status_code == 200
     assert "New income schedule" in page.text
+
+
+async def test_dashboard_range_persists(client: httpx.AsyncClient) -> None:
+    await complete_setup(client)
+
+    response = await client.get("/?range=1Y")
+    assert response.status_code == 200
+    assert '<option value="1Y" selected>' in response.text
+
+    response = await client.get("/")
+    assert response.status_code == 200
+    assert '<option value="1Y" selected>' in response.text
+
+
+async def test_transaction_filters_persist_across_category_save(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    await complete_setup(client)
+    user = await session.scalar(select(User).where(User.email == SETUP_DATA["email"]))
+    assert user is not None
+    account = await session.scalar(select(Account).where(Account.user_id == user.id, Account.name == "Bank"))
+    assert account is not None
+    category = await session.scalar(
+        select(Category).where(Category.user_id == user.id, Category.normalized_name == "groceries")
+    )
+    assert category is not None
+    journal = await create_transaction(
+        session,
+        user,
+        transaction_type="withdrawal",
+        journal_date=date.today(),
+        description="Groceries",
+        amount=Decimal("25.00"),
+        currency_code=account.currency_code,
+        account_id=account.id,
+    )
+
+    response = await client.get("/transactions?range=1M&uncategorized=1")
+    assert response.status_code == 200
+    assert '<option value="1M" selected>' in response.text
+    assert 'name="uncategorized" value="1" checked' in response.text
+
+    # A plain navigation to /transactions should keep the last filters.
+    response = await client.get("/transactions")
+    assert response.status_code == 200
+    assert '<option value="1M" selected>' in response.text
+    assert 'name="uncategorized" value="1" checked' in response.text
+
+    response = await post_form(
+        client,
+        f"/transactions/{journal.id}/category",
+        {
+            "category_id": [str(category.id)],
+            "remember": ["1"],
+            "range": ["1M"],
+            "uncategorized": ["1"],
+        },
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/transactions?range=1M&uncategorized=1"

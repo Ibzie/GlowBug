@@ -68,7 +68,7 @@
 
         <div class="actions">
             <a class="btn btn-ghost" href="/savings">Cancel</a>
-            <button class="btn" type="submit">{% if goal %}Save goal{% else %}Create goal{% endif %}</button>
+            <button class="btn" type="submit">{{ icon("check") }}{% if goal %}Save goal{% else %}Create goal{% endif %}</button>
         </div>
     </form>
 </div>

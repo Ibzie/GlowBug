@@ -47,9 +47,9 @@
                     </td>
                     <td>
                         {% if entry.duplicate %}
-                            <span class="badge">duplicate</span>
+                            <span class="badge badge-warning">duplicate</span>
                         {% else %}
-                            <span class="badge">new</span>
+                            <span class="badge badge-success">new</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -71,7 +71,7 @@
 
         <div class="actions">
             <a class="btn btn-ghost" href="/transactions/import">Start over</a>
-            <button class="btn" type="submit">Import {{ total_rows }} row(s)</button>
+            <button class="btn" type="submit">{{ icon("check") }}Import {{ total_rows }} row(s)</button>
         </div>
     </form>
 </div>

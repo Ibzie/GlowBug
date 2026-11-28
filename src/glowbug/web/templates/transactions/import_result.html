@@ -9,19 +9,19 @@
 
     <div class="stat-grid">
         <div class="stat">
-            <span class="stat-label">Imported</span>
+            <span class="stat-label">{{ icon("check-circle") }}Imported</span>
             <strong class="stat-value">{{ summary.imported }}</strong>
         </div>
         <div class="stat">
-            <span class="stat-label">Duplicates skipped</span>
+            <span class="stat-label">{{ icon("transactions") }}Duplicates skipped</span>
             <strong class="stat-value">{{ summary.skipped }}</strong>
         </div>
         <div class="stat">
-            <span class="stat-label">Categorized</span>
+            <span class="stat-label">{{ icon("categories") }}Categorized</span>
             <strong class="stat-value">{{ summary.categorized }}</strong>
         </div>
         <div class="stat">
-            <span class="stat-label">Needs category</span>
+            <span class="stat-label">{{ icon("alert") }}Needs category</span>
             <strong class="stat-value">{{ summary.uncategorized }}</strong>
         </div>
     </div>
@@ -44,10 +44,21 @@
         <div class="card-grid">
             {% for view in candidate_views %}
                 {% set candidate = view.candidate %}
-                <article class="card subscription-card">
+                <article class="card candidate-card">
+                    <form method="post" action="/subscriptions/dismiss-candidate">
+                        <input type="hidden" name="name" value="{{ candidate.name }}">
+                        <input type="hidden" name="merchant_key" value="{{ candidate.merchant_key }}">
+                        <input type="hidden" name="amount" value="{{ candidate.amount }}">
+                        <input type="hidden" name="currency_code" value="{{ candidate.currency_code }}">
+                        <input type="hidden" name="frequency" value="{{ candidate.frequency }}">
+                        <input type="hidden" name="next_due_date" value="{{ candidate.next_due_date }}">
+                        <button type="submit" class="candidate-dismiss"
+                                title="Dismiss — don't suggest this again"
+                                aria-label="Dismiss suggestion for {{ candidate.name }}">{{ icon("x") }}</button>
+                    </form>
                     <div class="row-between">
                         <h3>{{ candidate.name }}</h3>
-                        <span class="badge">{{ candidate.frequency }}</span>
+                        <span class="badge badge-accent">{{ icon("sparkles") }}{{ candidate.frequency }}</span>
                     </div>
                     <p class="amount">{{ format_money(candidate.amount, candidate.currency_code, user.locale) }}</p>
                     <p class="muted small">
@@ -72,13 +83,14 @@
                         <input type="hidden" name="next_due_date" value="{{ candidate.next_due_date }}">
                         <input type="hidden" name="account_id" value="{{ candidate.account_id or '' }}">
                         <input type="hidden" name="category_id" value="{{ candidate.category_id or '' }}">
-                        <button class="btn" type="submit">Create subscription</button>
+                        <button class="btn" type="submit">{{ icon("check") }}Create subscription</button>
                     </form>
                 </article>
             {% endfor %}
         </div>
     {% else %}
         <div class="card empty">
+            {{ icon("sparkles") }}
             <p>No recurring patterns detected yet. They will appear after at least three similar payments.</p>
             <a class="btn btn-secondary" href="/transactions">View transactions</a>
         </div>

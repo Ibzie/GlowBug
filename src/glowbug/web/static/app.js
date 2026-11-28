@@ -69,6 +69,12 @@ document.addEventListener("click", (event) => {
         return;
     }
 
+    const flashClose = target.closest("[data-flash-close]");
+    if (flashClose) {
+        flashClose.closest(".flash")?.remove();
+        return;
+    }
+
     const button = target.closest("[data-remove-account]");
     if (!(button instanceof HTMLElement)) {
         return;
@@ -79,3 +85,30 @@ document.addEventListener("click", (event) => {
         row.remove();
     }
 });
+
+document.querySelectorAll("[data-auto-submit]").forEach((element) => {
+    element.addEventListener("change", () => {
+        const form = element.closest("form");
+        if (form instanceof HTMLFormElement) {
+            form.requestSubmit();
+        }
+    });
+});
+
+const scrollContainer = document.querySelector("[data-preserve-scroll]");
+if (scrollContainer) {
+    const scrollKey = `scroll:${window.location.pathname}${window.location.search}`;
+    try {
+        const savedScroll = window.sessionStorage.getItem(scrollKey);
+        if (savedScroll !== null) {
+            window.requestAnimationFrame(() => {
+                window.scrollTo(0, Number(savedScroll) || 0);
+            });
+        }
+        window.addEventListener("beforeunload", () => {
+            window.sessionStorage.setItem(scrollKey, String(window.scrollY));
+        });
+    } catch {
+        // Session storage can be unavailable in private browsing.
+    }
+}

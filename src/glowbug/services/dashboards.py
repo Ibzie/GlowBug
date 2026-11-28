@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from decimal import Decimal, localcontext
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -17,7 +17,7 @@ from glowbug.models.category import Category
 from glowbug.models.dashboard import Dashboard, DashboardWidget
 from glowbug.models.transaction import Transaction, TransactionJournal
 from glowbug.models.user import User
-from glowbug.services.accounts import get_primary_currency, get_secondary_currency
+from glowbug.services.accounts import get_primary_currency, get_secondary_currency, get_user_currencies
 from glowbug.services.dashboard import build_dashboard
 from glowbug.services.formatting import format_money
 from glowbug.services.fx.exceptions import RateUnavailableError
@@ -93,12 +93,12 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
     },
     {
         "type": "fx_rate",
-        "name": "Exchange rate",
-        "description": "Latest rate between your primary and secondary currencies.",
-        "visualizations": ["number"],
-        "default_title": "Exchange rate",
-        "default_config": {"visualization": "number"},
-        "default_size": {"w": 5, "h": 2},
+        "name": "Exchange rates",
+        "description": "Latest rates with 7-day and 30-day movement.",
+        "visualizations": ["table"],
+        "default_title": "Exchange rates",
+        "default_config": {"visualization": "table", "currency_mode": "primary"},
+        "default_size": {"w": 6, "h": 3},
     },
     {
         "type": "tax_summary",
@@ -121,7 +121,7 @@ def default_widgets() -> list[dict[str, Any]]:
         {"type": "income_expense", "layout": {"x": 0, "y": 3, "w": 6, "h": 3}},
         {"type": "cash_flow", "layout": {"x": 6, "y": 3, "w": 6, "h": 3}},
         {"type": "recent_transactions", "layout": {"x": 0, "y": 6, "w": 7, "h": 3}},
-        {"type": "fx_rate", "layout": {"x": 7, "y": 6, "w": 5, "h": 2}},
+        {"type": "fx_rate", "layout": {"x": 7, "y": 6, "w": 5, "h": 3}},
         {"type": "category_spend", "layout": {"x": 0, "y": 9, "w": 6, "h": 3}},
         {"type": "tax_summary", "layout": {"x": 6, "y": 9, "w": 6, "h": 2}},
         {"type": "balance_sections", "layout": {"x": 0, "y": 12, "w": 6, "h": 3}},
@@ -496,33 +496,50 @@ async def build_widget_data(
         }
 
     if widget.type == "fx_rate":
-        quote = secondary.code if secondary else ("EUR" if primary.code != "EUR" else "USD")
-        service = ExchangeRateService(session)
-        try:
-            rate, rate_date = await service.get_rate(primary.code, quote, end)
-        except RateUnavailableError:
-            return {
-                "kind": "number",
-                "value": None,
-                "base": primary.code,
-                "quote": quote,
-                "warning": f"No {primary.code}/{quote} rate for {end.isoformat()}.",
-            }
+        codes = [currency.code for currency in await get_user_currencies(session, user.id)]
+        quotes = [code for code in codes if code != primary.code]
+        if not quotes:
+            quotes = [secondary.code if secondary else ("EUR" if primary.code != "EUR" else "USD")]
 
-        display_base, display_quote = primary.code, quote
-        display_rate = rate
-        if rate < 1:
-            with localcontext() as context:
-                context.prec = 38
-                display_rate = Decimal("1") / rate
-            display_base, display_quote = quote, primary.code
+        service = ExchangeRateService(session)
+        rate_rows: list[dict[str, Any]] = []
+        rate_warnings: set[str] = set()
+        for quote in quotes:
+            try:
+                rate, rate_date = await service.get_rate(primary.code, quote, end)
+            except RateUnavailableError:
+                rate_rows.append({"quote": quote, "rate": None, "rate_date": None, "changes": {}})
+                rate_warnings.add(f"No {primary.code}/{quote} rate for {end.isoformat()}.")
+                continue
+
+            changes: dict[str, dict[str, str | None]] = {}
+            for label, days in (("7d", 7), ("30d", 30)):
+                try:
+                    previous, _ = await service.get_rate(primary.code, quote, end - timedelta(days=days))
+                except RateUnavailableError:
+                    continue
+                delta = rate - previous
+                percent = (delta / previous * Decimal("100")) if previous != 0 else None
+                changes[label] = {
+                    "delta": str(delta),
+                    "percent": str(percent.quantize(Decimal("0.01"))) if percent is not None else None,
+                }
+
+            rate_rows.append(
+                {
+                    "quote": quote,
+                    "rate": str(rate),
+                    "rate_date": rate_date.isoformat(),
+                    "changes": changes,
+                }
+            )
 
         return {
-            "kind": "number",
-            "value": str(display_rate),
-            "base": display_base,
-            "quote": display_quote,
-            "rate_date": rate_date.isoformat(),
+            "kind": "rates",
+            "base": primary.code,
+            "rows": rate_rows,
+            "as_of": end.isoformat(),
+            "warnings": sorted(rate_warnings),
         }
 
     return {"kind": "error", "message": f"Unknown widget type: {widget.type}"}

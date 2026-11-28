@@ -8,7 +8,7 @@
             <h1>Your categories</h1>
             <p class="muted">Categories power the spending figures and help categorise imported transactions.</p>
         </div>
-        <a class="btn" href="/categories/new">New category</a>
+        <a class="btn" href="/categories/new">{{ icon("plus") }}New category</a>
     </div>
 
     <div class="card table-card">
@@ -26,7 +26,7 @@
                     <td>
                         <span class="color-dot" style="background: {{ category.color }}"></span>
                         <strong>{{ category.name }}</strong>
-                        {% if category.is_system %}<span class="badge">default</span>{% endif %}
+                        {% if category.is_system %}<span class="badge badge-accent">default</span>{% endif %}
                     </td>
                     <td class="right">{{ counts.get(category.id, 0) }}</td>
                     <td class="right">

@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import httpx
@@ -166,10 +166,11 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
     response = await client.get(f"/api/widgets/{widget['id']}/data")
     assert response.status_code == 200
     fx_payload = response.json()
-    assert fx_payload["kind"] == "number"
-    assert fx_payload["base"] == "EUR"
-    assert fx_payload["quote"] == "USD"
-    assert Decimal(fx_payload["value"]) > 1
+    assert fx_payload["kind"] == "rates"
+    assert fx_payload["base"] == "USD"
+    assert fx_payload["rows"][0]["quote"] == "EUR"
+    assert Decimal(fx_payload["rows"][0]["rate"]) == Decimal("0.9")
+    assert fx_payload["rows"][0]["changes"] == {}
 
     response = await client.patch(f"/api/widgets/{widget['id']}", json={"title": "Rate"})
     assert response.status_code == 200
@@ -251,3 +252,45 @@ async def test_income_expense_widget_data(session: AsyncSession) -> None:
     assert len(data["labels"]) >= 1
     assert sum(data["datasets"][0]["data"]) == 500.0
     assert sum(data["datasets"][1]["data"]) == 100.0
+
+
+async def test_exchange_rate_widget_shows_movements(session: AsyncSession) -> None:
+    user = await make_user(session)
+    today = date.today()
+    session.add_all(
+        [
+            ExchangeRate(
+                base_code="USD",
+                quote_code="EUR",
+                as_of_date=today,
+                rate=Decimal("0.90"),
+                source="test",
+            ),
+            ExchangeRate(
+                base_code="USD",
+                quote_code="EUR",
+                as_of_date=today - timedelta(days=7),
+                rate=Decimal("0.80"),
+                source="test",
+            ),
+            ExchangeRate(
+                base_code="USD",
+                quote_code="EUR",
+                as_of_date=today - timedelta(days=30),
+                rate=Decimal("0.85"),
+                source="test",
+            ),
+        ]
+    )
+    await session.commit()
+
+    dashboard = await get_or_create_default_dashboard(session, user)
+    widget = next(widget for widget in dashboard.widgets if widget.type == "fx_rate")
+    data = await build_widget_data(session, user, widget, today - timedelta(days=30), today)
+
+    row = data["rows"][0]
+    assert row["quote"] == "EUR"
+    assert Decimal(row["rate"]) == Decimal("0.90")
+    assert Decimal(row["changes"]["7d"]["delta"]) == Decimal("0.10")
+    assert Decimal(row["changes"]["7d"]["percent"]) == Decimal("12.50")
+    assert Decimal(row["changes"]["30d"]["delta"]) == Decimal("0.05")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Annotated
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -13,7 +14,7 @@ from glowbug.models.account import Account
 from glowbug.security import get_session_user
 from glowbug.services.accounts import list_accounts
 from glowbug.services.categories import ensure_categories
-from glowbug.services.dashboards import default_range
+from glowbug.services.dashboards import VALID_RANGES, default_range
 from glowbug.services.transactions import (
     TRANSACTION_TYPES,
     assign_journal_category,
@@ -25,6 +26,73 @@ from glowbug.web.routes import flash, parse_decimal, render
 
 router = APIRouter(tags=["transactions"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+TRANSACTION_FILTER_KEY = "transaction_filters"
+
+
+def normalise_transaction_filters(raw: dict, categories) -> dict:  # type: ignore[no-untyped-def]
+    range_key = str(raw.get("range", "3M")).upper()
+    if range_key not in VALID_RANGES:
+        range_key = "3M"
+
+    category = str(raw.get("category", "") or "")
+    if category not in {str(category.id) for category in categories}:
+        category = ""
+
+    uncategorized = raw.get("uncategorized") in {True, "1", "true", "on"}
+    return {
+        "range": range_key,
+        "category": category,
+        "uncategorized": uncategorized,
+    }
+
+
+def stored_transaction_filters(request: Request, categories) -> dict:  # type: ignore[no-untyped-def]
+    stored = request.session.get(TRANSACTION_FILTER_KEY)
+    return normalise_transaction_filters(stored if isinstance(stored, dict) else {}, categories)
+
+
+def transaction_filters_from_query(request: Request, categories) -> dict:  # type: ignore[no-untyped-def]
+    params = request.query_params
+    if any(key in params for key in ("range", "category", "uncategorized")):
+        filters = normalise_transaction_filters(
+            {
+                "range": params.get("range", "3M"),
+                "category": params.get("category", ""),
+                "uncategorized": params.get("uncategorized", ""),
+            },
+            categories,
+        )
+        request.session[TRANSACTION_FILTER_KEY] = filters
+        return filters
+    return stored_transaction_filters(request, categories)
+
+
+def transaction_filters_from_form(request: Request, form, categories) -> dict:  # type: ignore[no-untyped-def]
+    if any(key in form for key in ("range", "category", "uncategorized")):
+        filters = normalise_transaction_filters(
+            {
+                "range": form.get("range", "3M"),
+                "category": form.get("category", ""),
+                "uncategorized": form.get("uncategorized", ""),
+            },
+            categories,
+        )
+        request.session[TRANSACTION_FILTER_KEY] = filters
+        return filters
+    return stored_transaction_filters(request, categories)
+
+
+def transactions_url(filters: dict) -> str:
+    if filters == {"range": "3M", "category": "", "uncategorized": False}:
+        return "/transactions"
+    params: dict[str, str] = {"range": filters["range"]}
+    if filters["category"]:
+        params["category"] = filters["category"]
+    if filters["uncategorized"]:
+        params["uncategorized"] = "1"
+    return f"/transactions?{urlencode(params)}"
 
 
 def parse_uuid(value: str | None) -> UUID | None:
@@ -57,17 +125,16 @@ async def transactions_index(
         return RedirectResponse("/login", status_code=303)
 
     categories = await ensure_categories(session, user)
-    range_key = request.query_params.get("range", "3M").upper()
-    start, end = default_range(user, range_key)
-    category_filter = parse_uuid(request.query_params.get("category"))
-    uncategorized = request.query_params.get("uncategorized") == "1"
+    filters = transaction_filters_from_query(request, categories)
+    start, end = default_range(user, filters["range"])
+    category_filter = parse_uuid(filters["category"])
     views = await list_transactions(
         session,
         user,
         start,
         end,
         category_id=category_filter,
-        uncategorized=uncategorized,
+        uncategorized=filters["uncategorized"],
     )
 
     return render(
@@ -77,11 +144,12 @@ async def transactions_index(
             "user": user,
             "views": views,
             "categories": categories,
-            "range_key": range_key,
+            "range_key": filters["range"],
             "start": start,
             "end": end,
             "category_filter": category_filter,
-            "uncategorized": uncategorized,
+            "uncategorized": filters["uncategorized"],
+            "filters": filters,
         },
     )
 
@@ -171,8 +239,10 @@ async def transaction_create_submit(
         context.update({"values": values, "error": str(exc)})
         return render(request, "transactions/form.html", context, status_code=400)
 
+    categories = await ensure_categories(session, user)
+    filters = stored_transaction_filters(request, categories)
     flash(request, "Transaction created.", "success")
-    return RedirectResponse("/transactions", status_code=303)
+    return RedirectResponse(transactions_url(filters), status_code=303)
 
 
 @router.post("/transactions/{journal_id}/category", response_model=None)
@@ -186,16 +256,19 @@ async def transaction_assign_category(
         return RedirectResponse("/login", status_code=303)
 
     form = await request.form()
+    categories = await ensure_categories(session, user)
+    filters = transaction_filters_from_form(request, form, categories)
+    return_url = transactions_url(filters)
     category_id = parse_uuid(str(form.get("category_id", "")))
     remember = str(form.get("remember", "")) == "1"
     if category_id is None:
         flash(request, "Choose a category.", "error")
-        return RedirectResponse("/transactions", status_code=303)
+        return RedirectResponse(return_url, status_code=303)
 
     journal = await get_journal(session, user, journal_id)
     if journal is None:
         flash(request, "Transaction not found.", "error")
-        return RedirectResponse("/transactions", status_code=303)
+        return RedirectResponse(return_url, status_code=303)
 
     try:
         updated = await assign_journal_category(
@@ -207,10 +280,10 @@ async def transaction_assign_category(
         )
     except ValueError as exc:
         flash(request, str(exc), "error")
-        return RedirectResponse("/transactions", status_code=303)
+        return RedirectResponse(return_url, status_code=303)
 
     message = "Category saved."
     if updated:
         message += f" {updated} similar transaction(s) were updated too."
     flash(request, message, "success")
-    return RedirectResponse("/transactions", status_code=303)
+    return RedirectResponse(return_url, status_code=303)

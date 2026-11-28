@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Transactions · GlowBug{% endblock %}
 {% block content %}
-<div class="wide">
+<div class="wide" data-preserve-scroll>
     <div class="hero row-between">
         <div>
             <p class="eyebrow">Transactions</p>
@@ -9,16 +9,16 @@
             <p class="muted">{{ start }} → {{ end }}</p>
         </div>
         <div class="actions">
-            <a class="btn btn-secondary" href="/subscriptions">Subscriptions</a>
-            <a class="btn btn-secondary" href="/transactions/import">Import statement</a>
-            <a class="btn" href="/transactions/new">New transaction</a>
+            <a class="btn btn-secondary" href="/subscriptions">{{ icon("subscriptions") }}Subscriptions</a>
+            <a class="btn btn-secondary" href="/transactions/import">{{ icon("upload") }}Import statement</a>
+            <a class="btn" href="/transactions/new">{{ icon("plus") }}New transaction</a>
         </div>
     </div>
 
     <form method="get" action="/transactions" class="card filter-bar">
         <label class="field">
             <span>Range</span>
-            <select name="range">
+            <select name="range" data-auto-submit>
                 <option value="1M" {% if range_key == '1M' %}selected{% endif %}>1 month</option>
                 <option value="3M" {% if range_key == '3M' %}selected{% endif %}>3 months</option>
                 <option value="6M" {% if range_key == '6M' %}selected{% endif %}>6 months</option>
@@ -40,7 +40,7 @@
             <input type="checkbox" name="uncategorized" value="1" {% if uncategorized %}checked{% endif %}>
             <span>Only uncategorized</span>
         </label>
-        <button class="btn btn-secondary" type="submit">Filter</button>
+        <button class="btn btn-secondary" type="submit">{{ icon("filter") }}Filter</button>
     </form>
 
     <div class="card table-card">
@@ -61,8 +61,7 @@
                     <td>
                         <strong>{{ view.journal.description }}</strong>
                         <div class="muted small">{{ view.journal.type }}</div>
-                    </td>
-                    <td>
+                    </td><td>
                         {% if view.journal.category %}
                             <span class="badge">{{ view.journal.category.name }}</span>
                             {% if view.journal.category_source == 'memory' %}
@@ -72,6 +71,9 @@
                             {% endif %}
                         {% else %}
                             <form method="post" action="/transactions/{{ view.journal.id }}/category" class="inline-category">
+                                <input type="hidden" name="range" value="{{ range_key }}">
+                                <input type="hidden" name="category" value="{{ category_filter or '' }}">
+                                {% if uncategorized %}<input type="hidden" name="uncategorized" value="1">{% endif %}
                                 <select name="category_id" required>
                                     <option value="">Choose…</option>
                                     {% for category in categories %}
@@ -87,7 +89,7 @@
                         {% endif %}
                     </td>
                     <td>{{ view.account_name or '—' }}</td>
-                    <td class="right">{{ format_money(view.amount, view.currency_code, user.locale) }}</td>
+                    <td class="right {% if view.journal.type == 'deposit' %}amount-income{% elif view.journal.type == 'withdrawal' %}amount-expense{% endif %}">{{ format_money(view.amount, view.currency_code, user.locale) }}</td>
                 </tr>
             {% endfor %}
             {% if not views %}

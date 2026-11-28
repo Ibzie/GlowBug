@@ -23,7 +23,7 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                   {
                       column: 12,
                       cellHeight: 78,
-                      margin: 8,
+                      margin: 14,
                       float: true,
                       staticGrid: true,
                       draggable: { handle: ".widget-drag-handle" },
@@ -74,7 +74,49 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         table: "Table",
     };
 
-    const palette = ["#2f6fed", "#0f7b5f", "#b42318", "#8a5a00", "#7a5af8", "#0e7490"];
+    function cssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function themeColors() {
+        return {
+            accent: cssVar("--accent") || "#b45309",
+            success: cssVar("--success") || "#047857",
+            error: cssVar("--error") || "#be123c",
+            warning: cssVar("--warning") || "#a16207",
+            muted: cssVar("--muted") || "#78716c",
+            text: cssVar("--text") || "#1c1917",
+            surface: cssVar("--surface") || "#fffefb",
+            border: cssVar("--border") || "#e5dfd4",
+            grid: cssVar("--chart-grid") || "#e9e2d4",
+        };
+    }
+
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+
+    function hexAlpha(hex, alpha) {
+        const value = hex.replace("#", "");
+        if (value.length !== 6) {
+            return hex;
+        }
+        const r = parseInt(value.slice(0, 2), 16);
+        const g = parseInt(value.slice(2, 4), 16);
+        const b = parseInt(value.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function gradientFill(hex, strength = 0.26) {
+        return (context) => {
+            const { ctx, chartArea } = context.chart;
+            if (!chartArea) {
+                return hexAlpha(hex, strength);
+            }
+            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            gradient.addColorStop(0, hexAlpha(hex, strength));
+            gradient.addColorStop(1, hexAlpha(hex, 0.01));
+            return gradient;
+        };
+    }
 
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, (character) => {
@@ -189,7 +231,16 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         appendWarnings(body, payload.warnings);
     }
 
-    function styleDataset(dataset, index, chartType, payload) {
+    function styleDataset(dataset, index, chartType, payload, colors) {
+        const palette = [
+            colors.accent,
+            colors.success,
+            "#0ea5e9",
+            "#8b5cf6",
+            "#f43f5e",
+            "#84cc16",
+            "#fb923c",
+        ];
         const color = palette[index % palette.length];
         if (chartType === "doughnut" || chartType === "pie") {
             const explicitColors = Array.isArray(payload?.colors) ? payload.colors : [];
@@ -198,60 +249,128 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                 backgroundColor: (dataset.data || []).map(
                     (_, itemIndex) => explicitColors[itemIndex] || palette[itemIndex % palette.length],
                 ),
-                borderColor: "#ffffff",
+                borderColor: colors.surface,
                 borderWidth: 2,
+                borderRadius: 4,
+                spacing: 2,
+                hoverOffset: 6,
             };
         }
         if (dataset.label === "Income") {
             return {
                 ...dataset,
-                backgroundColor: "rgba(15, 123, 95, 0.65)",
-                borderColor: "#0f7b5f",
-                borderWidth: 1,
-                borderRadius: chartType === "bar" ? 6 : 0,
-                maxBarThickness: 44,
+                backgroundColor:
+                    chartType === "bar" ? hexAlpha(colors.success, 0.7) : gradientFill(colors.success),
+                borderColor: colors.success,
+                fill: chartType !== "bar",
+                borderWidth: chartType === "bar" ? 0 : 2,
+                borderRadius: chartType === "bar" ? 8 : 0,
+                maxBarThickness: 40,
+                tension: 0.35,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: colors.success,
             };
         }
         if (dataset.label === "Expenses") {
             return {
                 ...dataset,
-                backgroundColor: "rgba(180, 35, 24, 0.55)",
-                borderColor: "#b42318",
-                borderWidth: 1,
-                borderRadius: chartType === "bar" ? 6 : 0,
-                maxBarThickness: 44,
+                backgroundColor:
+                    chartType === "bar" ? hexAlpha(colors.error, 0.7) : gradientFill(colors.error),
+                borderColor: colors.error,
+                fill: chartType !== "bar",
+                borderWidth: chartType === "bar" ? 0 : 2,
+                borderRadius: chartType === "bar" ? 8 : 0,
+                maxBarThickness: 40,
+                tension: 0.35,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: colors.error,
             };
         }
 
         return {
             ...dataset,
-            backgroundColor: chartType === "bar" ? `${color}99` : "transparent",
+            backgroundColor:
+                chartType === "bar" ? hexAlpha(color, 0.72) : gradientFill(color),
             borderColor: color,
-            borderWidth: 2,
-            borderRadius: chartType === "bar" ? 6 : 0,
-            maxBarThickness: 44,
-            tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 4,
+            fill: chartType !== "bar",
+            borderWidth: chartType === "bar" ? 0 : 2,
+            borderRadius: chartType === "bar" ? 8 : 0,
+            maxBarThickness: 40,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: color,
         };
     }
 
-    function chartOptions(payload) {
+    function tooltipStyle(colors) {
+        return {
+            backgroundColor: colors.surface,
+            titleColor: colors.text,
+            bodyColor: colors.muted,
+            borderColor: colors.border,
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 10,
+            boxPadding: 5,
+            titleFont: { weight: "700" },
+        };
+    }
+
+    function centerTotalPlugin(colors, currency) {
+        return {
+            id: "centerTotal",
+            afterDraw(chart) {
+                const dataset = chart.data.datasets[0];
+                if (!dataset) {
+                    return;
+                }
+                const total = (dataset.data || []).reduce((sum, value) => sum + Number(value || 0), 0);
+                const { ctx } = chart;
+                const meta = chart.getDatasetMeta(0);
+                if (!meta.data[0]) {
+                    return;
+                }
+                const { x, y } = meta.data[0];
+                ctx.save();
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = colors.text;
+                ctx.font = "700 1.15rem system-ui, sans-serif";
+                ctx.fillText(formatCompact(total, currency), x, y - 6);
+                ctx.fillStyle = colors.muted;
+                ctx.font = "600 0.62rem system-ui, sans-serif";
+                ctx.fillText("TOTAL", x, y + 12);
+                ctx.restore();
+            },
+        };
+    }
+
+    function chartOptions(payload, colors) {
         if (payload.chart === "doughnut" || payload.chart === "pie") {
             return {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: payload.chart === "doughnut" ? "62%" : 0,
+                cutout: payload.chart === "doughnut" ? "64%" : 0,
                 plugins: {
                     legend: {
                         display: true,
                         position: "bottom",
-                        labels: { boxWidth: 10, usePointStyle: true, padding: 12 },
+                        labels: { boxWidth: 10, usePointStyle: true, padding: 12, color: colors.muted },
                     },
                     tooltip: {
+                        ...tooltipStyle(colors),
                         callbacks: {
                             label(context) {
-                                return `${context.label}: ${formatMoney(context.parsed, payload.currency)}`;
+                                const total = (context.dataset.data || []).reduce(
+                                    (sum, value) => sum + Number(value || 0),
+                                    0,
+                                );
+                                const share =
+                                    total > 0 ? ` · ${Math.round((Number(context.parsed) / total) * 100)}%` : "";
+                                return ` ${context.label}: ${formatMoney(context.parsed, payload.currency)}${share}`;
                             },
                         },
                     },
@@ -267,12 +386,13 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                 legend: {
                     display: (payload.datasets || []).length > 1,
                     position: "bottom",
-                    labels: { boxWidth: 10, usePointStyle: true, padding: 14 },
+                    labels: { boxWidth: 10, usePointStyle: true, padding: 14, color: colors.muted },
                 },
                 tooltip: {
+                    ...tooltipStyle(colors),
                     callbacks: {
                         label(context) {
-                            return `${context.dataset.label}: ${formatMoney(
+                            return ` ${context.dataset.label}: ${formatMoney(
                                 context.parsed.y,
                                 payload.currency,
                             )}`;
@@ -283,11 +403,15 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             scales: {
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 0, autoSkip: true },
+                    border: { display: false },
+                    ticks: { maxRotation: 0, autoSkip: true, color: colors.muted },
                 },
                 y: {
                     beginAtZero: true,
+                    grid: { color: colors.grid },
+                    border: { display: false },
                     ticks: {
+                        color: colors.muted,
                         callback(value) {
                             return formatCompact(value, payload.currency);
                         },
@@ -298,6 +422,7 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
     }
 
     function renderChart(body, widget, payload) {
+        const colors = themeColors();
         const wrapper = document.createElement("div");
         wrapper.className = "chart-wrap";
         const canvas = document.createElement("canvas");
@@ -314,15 +439,21 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             existing.destroy();
         }
 
+        const plugins = [];
+        if (payload.chart === "doughnut") {
+            plugins.push(centerTotalPlugin(colors, payload.currency));
+        }
+
         const chart = new Chart(context, {
             type: payload.chart,
             data: {
                 labels: payload.labels || [],
                 datasets: (payload.datasets || []).map((dataset, index) =>
-                    styleDataset(dataset, index, payload.chart, payload),
+                    styleDataset(dataset, index, payload.chart, payload, colors),
                 ),
             },
-            options: chartOptions(payload),
+            options: chartOptions(payload, colors),
+            plugins,
         });
 
         chartInstances.set(widget.id, chart);
@@ -375,6 +506,97 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         appendWarnings(body, payload.warnings);
     }
 
+    function formatSigned(value, digits = 6) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+            return "—";
+        }
+        const formatted = new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: digits,
+        }).format(Math.abs(number));
+        if (number > 0) {
+            return `+${formatted}`;
+        }
+        if (number < 0) {
+            return `-${formatted}`;
+        }
+        return formatted;
+    }
+
+    function renderRates(body, payload) {
+        const rows = payload.rows || [];
+        if (rows.length === 0) {
+            body.innerHTML = `<div class="widget-empty">No exchange rates available.</div>`;
+            appendWarnings(body, payload.warnings);
+            return;
+        }
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "widget-table-wrap";
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        ["Pair", "Rate", "7 days", "30 days"].forEach((label, index) => {
+            const th = document.createElement("th");
+            th.textContent = label;
+            if (index > 0) {
+                th.className = "right";
+            }
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        rows.forEach((row) => {
+            const tr = document.createElement("tr");
+
+            const pair = document.createElement("td");
+            pair.textContent = `${payload.base} → ${row.quote}`;
+            tr.appendChild(pair);
+
+            const rate = document.createElement("td");
+            rate.className = "right";
+            rate.textContent = row.rate == null ? "—" : formatRate(row.rate);
+            if (row.rate_date) {
+                rate.title = `Rate date ${row.rate_date}`;
+            }
+            tr.appendChild(rate);
+
+            ["7d", "30d"].forEach((key) => {
+                const cell = document.createElement("td");
+                const change = row.changes?.[key];
+                if (!change) {
+                    cell.className = "right rate-change rate-flat";
+                    cell.textContent = "—";
+                } else {
+                    const delta = Number(change.delta);
+                    const tone = delta > 0 ? "rate-up" : delta < 0 ? "rate-down" : "rate-flat";
+                    cell.className = `right rate-change ${tone}`;
+                    const percent = change.percent == null ? "" : ` (${formatSigned(change.percent, 2)}%)`;
+                    cell.textContent = `${formatSigned(change.delta)}${percent}`;
+                    cell.title = `Change versus ${key === "7d" ? "7" : "30"} days ago`;
+                }
+                tr.appendChild(cell);
+            });
+
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrapper.appendChild(table);
+
+        if (payload.base) {
+            const note = document.createElement("p");
+            note.className = "widget-rate-note";
+            note.textContent = `Base ${payload.base}${payload.as_of ? ` · ${payload.as_of}` : ""}`;
+            wrapper.appendChild(note);
+        }
+
+        body.replaceChildren(wrapper);
+        appendWarnings(body, payload.warnings);
+    }
+
     function renderWidget(body, widget, payload) {
         if (payload.kind === "number") {
             renderNumber(body, widget, payload);
@@ -386,6 +608,10 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         }
         if (payload.kind === "table") {
             renderTable(body, payload);
+            return;
+        }
+        if (payload.kind === "rates") {
+            renderRates(body, payload);
             return;
         }
         body.innerHTML = `<div class="widget-empty">${escapeHtml(
@@ -704,4 +930,8 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
     }
 
     loadAllWidgets();
+
+    window
+        .matchMedia("(prefers-color-scheme: dark)")
+        .addEventListener("change", () => loadAllWidgets());
 }
