@@ -17,6 +17,11 @@ uv python pin 3.14t
 uv lock
 uv sync --frozen
 
+cd frontend
+npm ci
+npm run build
+cd ..
+
 docker compose up -d db
 uv run alembic upgrade head
 uv run glowbug currency seed
@@ -88,6 +93,10 @@ tests/           test suite
 migrations/      Alembic migrations
 frontend/        React dashboard island (added in Phase 2)
 ```
+
+The dashboard builder is a small Vite bundle in `frontend/` (Gridstack +
+Chart.js). `npm run build` writes to `src/glowbug/web/static/build/`; Docker
+builds it automatically.
 
 The `firefly-iii/` directory is a local reference and is intentionally ignored
 by git. It is not part of this repository or its release artifacts.

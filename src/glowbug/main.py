@@ -6,6 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from glowbug import __version__
 from glowbug.api.currencies import router as currencies_router
+from glowbug.api.dashboards import router as dashboards_router
 from glowbug.api.fx import router as fx_router
 from glowbug.api.health import router as health_router
 from glowbug.config import get_settings
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(currencies_router)
     app.include_router(fx_router)
+    app.include_router(dashboards_router)
     app.include_router(web_router)
 
     return app

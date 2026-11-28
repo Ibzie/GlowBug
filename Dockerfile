@@ -1,5 +1,15 @@
 FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
 
+FROM node:26-alpine AS frontend
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
 FROM debian:bookworm-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
@@ -24,6 +34,7 @@ COPY pyproject.toml uv.lock .python-version README.md LICENSE ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
+COPY --from=frontend /app/src/glowbug/web/static/build ./src/glowbug/web/static/build
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000

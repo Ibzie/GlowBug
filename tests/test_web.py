@@ -184,6 +184,17 @@ async def test_create_additional_account(client: httpx.AsyncClient, session: Asy
     assert "USD wallet" in response.text
 
 
+async def test_dashboard_renders_widget_builder(client: httpx.AsyncClient) -> None:
+    await complete_setup(client)
+
+    response = await client.get("/")
+    assert response.status_code == 200
+    assert "dashboard-bootstrap" in response.text
+    assert "grid-stack" in response.text
+    assert "Add widget" in response.text
+    assert "Net worth" in response.text
+
+
 async def test_dashboard_shows_last_sync_discreetly(
     client: httpx.AsyncClient,
     session: AsyncSession,

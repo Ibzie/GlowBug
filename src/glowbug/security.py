@@ -54,3 +54,13 @@ async def require_user(
     if user is None:
         raise HTTPException(status_code=303, headers={"Location": "/login"})
     return user
+
+
+async def require_api_user(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> User:
+    user = await get_session_user(request, session)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user

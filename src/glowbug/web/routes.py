@@ -34,6 +34,13 @@ from glowbug.services.accounts import (
     set_user_currencies,
 )
 from glowbug.services.dashboard import build_dashboard
+from glowbug.services.dashboards import (
+    VALID_RANGES,
+    WIDGET_CATALOG,
+    default_range,
+    get_or_create_default_dashboard,
+    serialize_dashboard,
+)
 from glowbug.services.fx.sync import get_last_sync
 from glowbug.web.templating import templates
 
@@ -394,11 +401,26 @@ async def dashboard(request: Request, session: SessionDep) -> HTMLResponse | Red
     if not await has_accounts(session, user.id):
         return RedirectResponse("/setup/accounts", status_code=303)
 
-    data = await build_dashboard(session, user)
+    dashboard = await get_or_create_default_dashboard(session, user)
+    range_key = request.query_params.get("range", "6M").upper()
+    if range_key not in VALID_RANGES:
+        range_key = "6M"
+    start, end = default_range(user, range_key)
+
     return render(
         request,
         "dashboard.html",
-        {"user": user, "data": data, "last_fx_sync": await get_last_sync(session)},
+        {
+            "user": user,
+            "dashboard": serialize_dashboard(dashboard),
+            "catalog": WIDGET_CATALOG,
+            "range_key": range_key,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "primary_currency": await get_primary_currency(session, user.id),
+            "secondary_currency": await get_secondary_currency(session, user.id),
+            "last_fx_sync": await get_last_sync(session),
+        },
     )
 
 
