@@ -511,6 +511,15 @@ tr:last-child td {
     letter-spacing: 0.04em;
 }
 
+.footer-note {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-align: center;
+}
+
 .empty {
     text-align: center;
     padding: 40px 20px;

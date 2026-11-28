@@ -34,6 +34,7 @@ from glowbug.services.accounts import (
     set_user_currencies,
 )
 from glowbug.services.dashboard import build_dashboard
+from glowbug.services.fx.sync import get_last_sync
 from glowbug.web.templating import templates
 
 router = APIRouter()
@@ -394,7 +395,11 @@ async def dashboard(request: Request, session: SessionDep) -> HTMLResponse | Red
         return RedirectResponse("/setup/accounts", status_code=303)
 
     data = await build_dashboard(session, user)
-    return render(request, "dashboard.html", {"user": user, "data": data})
+    return render(
+        request,
+        "dashboard.html",
+        {"user": user, "data": data, "last_fx_sync": await get_last_sync(session)},
+    )
 
 
 @router.get("/accounts", response_class=HTMLResponse, response_model=None)
@@ -406,7 +411,11 @@ async def accounts_index(request: Request, session: SessionDep) -> HTMLResponse 
         return RedirectResponse("/setup/accounts", status_code=303)
 
     data = await build_dashboard(session, user)
-    return render(request, "accounts/index.html", {"user": user, "data": data})
+    return render(
+        request,
+        "accounts/index.html",
+        {"user": user, "data": data, "last_fx_sync": await get_last_sync(session)},
+    )
 
 
 @router.get("/accounts/new", response_class=HTMLResponse, response_model=None)

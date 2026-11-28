@@ -44,6 +44,22 @@ Open [http://localhost:8000](http://localhost:8000) for the first-run setup:
 Missing exchange rates return `404` or an explicit “Incomplete — missing rate”
 label. They are never silently treated as `1.0`.
 
+## Exchange rates
+
+Rates come from **Frankfurter v2** only. There is no fallback provider.
+
+- Weekly sync: Monday 06:00 UTC via the Taskiq scheduler.
+- Manual runs:
+
+```bash
+uv run glowbug fx sync
+uv run glowbug fx status
+```
+
+- The last successful sync is shown as a small footer note on the dashboard.
+- If a sync fails, existing rates remain in place and the dashboard keeps showing
+  “Incomplete — missing rate” until the next successful sync.
+
 ## Docker
 
 ```bash

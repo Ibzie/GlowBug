@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from glowbug.models.account import Account
 from glowbug.models.user import User, UserCurrency
 from glowbug.services.accounts import get_primary_currency, get_secondary_currency
+from glowbug.services.settings import set_setting
 
 SETUP_DATA = {
     "email": "ibzie@example.com",
@@ -181,6 +182,20 @@ async def test_create_additional_account(client: httpx.AsyncClient, session: Asy
     response = await client.get("/accounts")
     assert response.status_code == 200
     assert "USD wallet" in response.text
+
+
+async def test_dashboard_shows_last_sync_discreetly(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    await complete_setup(client)
+    await set_setting(session, "fx.last_sync_at", "2026-11-28T06:00:00+00:00")
+    await session.commit()
+
+    response = await client.get("/")
+    assert response.status_code == 200
+    assert "last sync" in response.text.lower()
+    assert "28 Nov 2026" in response.text
 
 
 async def test_setup_rejects_mismatched_passwords(client: httpx.AsyncClient) -> None:

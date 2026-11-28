@@ -31,6 +31,12 @@
     {% endif %}
 
     {% block content %}{% endblock %}
+
+    {% if last_fx_sync is defined and last_fx_sync %}
+        <footer class="footer-note">
+            Exchange rates: Frankfurter · last sync {{ last_fx_sync.strftime("%d %b %Y %H:%M UTC") }}
+        </footer>
+    {% endif %}
 </main>
 
 <script src="{{ request.url_for('static', path='app.js') }}"></script>
