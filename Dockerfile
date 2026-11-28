@@ -21,7 +21,7 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/opt/python/bin:$PATH"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl poppler-utils \
+    && apt-get install -y --no-install-recommends ca-certificates curl tesseract-ocr tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=uv /uv /uvx /bin/

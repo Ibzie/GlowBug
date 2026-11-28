@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from glowbug.db.session import get_session
@@ -90,7 +91,7 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": "Choose a CSV file."},
+            {"user": user, "accounts": accounts, "error": "Choose a CSV, XLSX, or PDF statement."},
             status_code=400,
         )
 
@@ -122,7 +123,7 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
     path.write_bytes(content)
 
     try:
-        headers, rows = read_statement(path)
+        headers, rows = await run_in_threadpool(read_statement, path)
     except ValueError as exc:
         path.unlink(missing_ok=True)
         return render(
@@ -185,7 +186,7 @@ async def import_preview(request: Request, session: SessionDep) -> HTMLResponse 
             status_code=400,
         )
 
-    parsed = parse_rows(path, mapping, account)
+    parsed = await run_in_threadpool(parse_rows, path, mapping, account)
     existing = await existing_fingerprints(session, user, [row.fingerprint for row in parsed.rows])
     seen: set[str] = set()
     duplicate_count = 0
@@ -239,7 +240,7 @@ async def import_confirm(request: Request, session: SessionDep) -> HTMLResponse 
         flash(request, "The upload expired. Please upload the file again.", "error")
         return RedirectResponse("/transactions/import", status_code=303)
 
-    parsed = parse_rows(path, mapping, account)
+    parsed = await run_in_threadpool(parse_rows, path, mapping, account)
     summary = await import_rows(session, user, parsed.rows, account)
     path.unlink(missing_ok=True)
     request.session.pop("import_token", None)

@@ -54,6 +54,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://glowbug:glowbug@db:5432/glowbug
       REDIS_URL: redis://redis:6379/0
       TZ: UTC
+      OCR_LANGUAGE: ${OCR_LANGUAGE:-eng}
+      OCR_SCALE: ${OCR_SCALE:-4}
+      OCR_MIN_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-20}
+      OCR_PSM: ${OCR_PSM:-6}
+      OCR_MAX_PAGES: ${OCR_MAX_PAGES:-25}
     ports:
       - "8000:8000"
     healthcheck:

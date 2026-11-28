@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from fpdf import FPDF
 from openpyxl import Workbook
+from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,13 +18,14 @@ from glowbug.services.accounts import create_account, set_user_currencies
 from glowbug.services.categories import get_category_by_name, seed_default_categories
 from glowbug.services.importer import (
     ImportMapping,
-    _parse_layout_text,
     import_rows,
     parse_amount,
     parse_date,
     parse_rows,
     read_statement,
 )
+
+requires_tesseract = pytest.mark.skipif(shutil.which("tesseract") is None, reason="tesseract is not installed")
 
 
 async def ensure_currency(session: AsyncSession, code: str, symbol: str) -> None:
@@ -74,6 +76,11 @@ def test_read_xlsx_statement(tmp_path: Path) -> None:
     assert rows[0]["Amount"] == "15.99"
 
 
+def test_parse_date_accepts_compact_ocr_date() -> None:
+    assert parse_date("20260115", "%Y-%m-%d") == date(2026, 1, 15)
+
+
+@requires_tesseract
 def test_read_pdf_statement(tmp_path: Path) -> None:
     path = tmp_path / "statement.pdf"
     pdf = FPDF()
@@ -96,35 +103,80 @@ def test_read_pdf_statement(tmp_path: Path) -> None:
     assert headers[:3] == ["Date", "Description", "Amount"]
     assert len(rows) == 2
     assert rows[0]["Description"] == "NETFLIX"
+    assert rows[0]["Amount"] == "15.99"
 
 
-def test_parse_layout_text() -> None:
-    rows = _parse_layout_text("Date        Description        Amount\n2026-01-15  NETFLIX            15.99\n")
-    assert rows[0] == ["Date", "Description", "Amount"]
-    assert rows[1] == ["2026-01-15", "NETFLIX", "15.99"]
+@requires_tesseract
+def test_read_scanned_pdf_without_text_layer(tmp_path: Path) -> None:
+    path = tmp_path / "scan.pdf"
+    image = Image.new("RGB", (1800, 900), "white")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=44)
 
+    draw.text((80, 80), "Date", fill="black", font=font)
+    draw.text((520, 80), "Description", fill="black", font=font)
+    draw.text((1300, 80), "Amount", fill="black", font=font)
 
-@pytest.mark.skipif(shutil.which("pdftotext") is None, reason="pdftotext is not installed")
-def test_read_pdf_layout_fallback(tmp_path: Path) -> None:
-    path = tmp_path / "layout.pdf"
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=10)
-    for values in (
-        ("Date", "Description", "Amount"),
+    rows = (
         ("2026-01-15", "NETFLIX", "15.99"),
         ("2026-01-20", "COFFEE SHOP", "4.50"),
+    )
+    for index, values in enumerate(rows, start=1):
+        top = 80 + index * 110
+        draw.text((80, top), values[0], fill="black", font=font)
+        draw.text((520, top), values[1], fill="black", font=font)
+        draw.text((1300, top), values[2], fill="black", font=font)
+
+    image.save(path, "PDF", resolution=150)
+
+    headers, parsed = read_statement(path)
+    assert headers[:3] == ["Date", "Description", "Amount"]
+    assert len(parsed) == 2
+    assert parsed[0]["Description"] == "NETFLIX"
+    assert parsed[0]["Amount"] == "15.99"
+    assert parsed[1]["Description"].replace(" ", "").upper() == "COFFEESHOP"
+
+
+@requires_tesseract
+def test_read_pdf_repairs_merged_header_cells(tmp_path: Path) -> None:
+    path = tmp_path / "paragraph.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Courier", size=10)
+    for line in (
+        "Date Description Amount",
+        "2026-01-15 NETFLIX 15.99",
+        "2026-01-20 COFFEE SHOP 4.50",
     ):
-        pdf.cell(40, 10, values[0])
-        pdf.cell(60, 10, values[1])
-        pdf.cell(30, 10, values[2])
-        pdf.ln()
+        pdf.cell(0, 8, line, new_x="LMARGIN", new_y="NEXT")
     pdf.output(str(path))
 
     headers, rows = read_statement(path)
     assert headers[:3] == ["Date", "Description", "Amount"]
     assert len(rows) == 2
-    assert rows[0]["Description"] == "NETFLIX"
+    assert rows[1]["Description"] == "COFFEE SHOP"
+    assert rows[1]["Amount"] == "4.50"
+
+
+@requires_tesseract
+def test_read_pdf_drops_repeated_page_headers(tmp_path: Path) -> None:
+    path = tmp_path / "pages.pdf"
+    pdf = FPDF()
+    pdf.set_font("Helvetica", size=10)
+    for page in range(2):
+        pdf.add_page()
+        with pdf.table() as table:
+            row = table.row()
+            for value in ("Date", "Description", "Amount"):
+                row.cell(value)
+            row = table.row()
+            for value in (f"2026-0{page + 1}-15", f"MERCHANT {page + 1}", f"{page + 1}.00"):
+                row.cell(value)
+    pdf.output(str(path))
+
+    _, rows = read_statement(path)
+    assert len(rows) == 2
+    assert [row["Description"] for row in rows] == ["MERCHANT 1", "MERCHANT 2"]
 
 
 def test_read_statement_rejects_unknown_type(tmp_path: Path) -> None:

@@ -4,10 +4,10 @@ import csv
 import hashlib
 import io
 import re
-import subprocess
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -21,6 +21,7 @@ from glowbug.models.user import User
 from glowbug.services.categories import get_category_by_name
 from glowbug.services.categorizer import MerchantPrediction, normalize_merchant, predict_category
 from glowbug.services.ledger import Split, post_journal
+from glowbug.services.pdf_ocr import extract_pdf_rows
 from glowbug.services.transactions import ensure_system_account
 
 DATE_FORMATS = [
@@ -180,133 +181,110 @@ def read_xlsx(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     return _rows_to_dicts(raw_rows, header_index)
 
 
-TABLE_SETTINGS = [
-    {},
-    {
-        "vertical_strategy": "text",
-        "horizontal_strategy": "text",
-        "intersection_tolerance": 5,
-    },
-    {"vertical_strategy": "lines", "horizontal_strategy": "text"},
-    {"vertical_strategy": "text", "horizontal_strategy": "lines"},
-]
+HEADER_KEYWORDS = (
+    "date",
+    "description",
+    "details",
+    "amount",
+    "debit",
+    "credit",
+    "balance",
+    "narrative",
+    "memo",
+    "payee",
+)
 
 
-def _table_score(table: list[list[str | None]]) -> int:
-    if not table or len(table) < 2:
-        return 0
-    header = [str(cell or "").strip().lower() for cell in table[0]]
-    joined = " ".join(header)
-    score = len(table)
-    if "date" in joined:
-        score += 15
-    if "amount" in joined or "debit" in joined or "credit" in joined:
-        score += 15
-    if "description" in joined or "details" in joined or "narrative" in joined:
-        score += 10
-    if len([cell for cell in header if cell]) >= 3:
-        score += 5
-    return score
+def _has_header_labels(row: list[str]) -> bool:
+    joined = " ".join(cell.lower() for cell in row if cell)
+    return any(keyword in joined for keyword in HEADER_KEYWORDS)
 
 
-def _table_to_dicts(
-    table: list[list[str | None]],
-) -> tuple[list[str], list[dict[str, str]]]:
-    rows = [[_cell_to_string(cell) for cell in row] for row in table]
+def _looks_like_transaction_row(row: list[str]) -> bool:
+    filled = [cell for cell in row if cell.strip()]
+    if len(filled) < 2:
+        return False
+    return _parse_known_date(row[0]) is not None and parse_amount(filled[-1]) is not None
+
+
+def _synthetic_header(width: int) -> list[str]:
+    if width <= 2:
+        return ["Date", "Amount"]
+    headers = ["Date", "Description"]
+    headers.extend(f"Column {index}" for index in range(3, width))
+    headers.append("Amount")
+    return headers
+
+
+def _pdf_column_roles(rows: list[list[str]], start: int) -> tuple[bool, bool]:
+    sample = [row for row in rows[start : start + 10] if sum(1 for cell in row if cell.strip()) >= 2]
+    if len(sample) < 2:
+        return False, False
+    date_hits = sum(1 for row in sample if _parse_known_date(row[0]) is not None)
+    amount_hits = sum(1 for row in sample if parse_amount([cell for cell in row if cell.strip()][-1]) is not None)
+    threshold = len(sample) * 0.6
+    return date_hits >= threshold, amount_hits >= threshold
+
+
+def _normalise_pdf_rows(rows: list[list[str]]) -> tuple[list[str], list[dict[str, str]]]:
+    rows = [row for row in rows if sum(1 for cell in row if cell.strip()) >= 2]
+    if not rows:
+        return [], []
+
     header_index = _find_header_index(rows)
-    return _rows_to_dicts(rows, header_index)
+    width = max(len(row) for row in rows)
+    has_date, has_amount = _pdf_column_roles(rows, header_index + 1)
 
-
-def _parse_layout_text(text: str) -> list[list[str]]:
-    rows: list[list[str]] = []
-    for line in text.replace("\f", "\n").splitlines():
-        if not line.strip():
-            continue
-        parts = [part.strip() for part in re.split(r"\t+| {2,}", line.strip()) if part.strip()]
-        if len(parts) >= 3:
-            rows.append(parts)
-    return rows
-
-
-def _pdftotext(path: Path) -> str | None:
-    try:
-        result = subprocess.run(
-            ["pdftotext", "-layout", "-enc", "UTF-8", str(path), "-"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
+    if not _has_header_labels(rows[header_index]):
+        # OCR sometimes mangles the header even when the data rows are clean.
+        # In that case label the columns by position instead of trusting garbage.
+        data_start = next(
+            (index for index, row in enumerate(rows) if _looks_like_transaction_row(row)),
+            None,
         )
-    except OSError, subprocess.SubprocessError:
-        return None
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    return result.stdout
+        if data_start is not None:
+            width = max(len(row) for row in rows[data_start:])
+            rows = [_synthetic_header(width), *rows[data_start:]]
+            header_index = 0
+    elif len(rows[header_index]) < width and has_date and has_amount:
+        # The header lost a cell (often two headings merged into one). The data
+        # still shows a date in the first column and an amount in the last, so
+        # use positional labels rather than a misaligned heading.
+        rows[header_index] = _synthetic_header(width)
+
+    headers, data_rows = _rows_to_dicts(rows, header_index)
+    labels = {header.strip().lower() for header in headers if header.strip()}
+    cleaned: list[dict[str, str]] = []
+    for row in data_rows:
+        values = [value.strip().lower() for value in row.values() if value.strip()]
+        repeated_header = len(values) >= 2 and sum(1 for value in values if value in labels) >= 2
+        if not repeated_header:
+            cleaned.append(row)
+    return headers, cleaned
+
+
+@lru_cache(maxsize=8)
+def _extract_pdf_rows_cached(
+    path_text: str,
+    mtime_ns: int,
+    size: int,
+) -> tuple[tuple[str, ...], ...]:
+    # The upload, preview, and confirm steps all read the same file. Caching
+    # keeps OCR from running three times per import.
+    return tuple(tuple(row) for row in extract_pdf_rows(Path(path_text)))
 
 
 def read_pdf(path: Path) -> tuple[list[str], list[dict[str, str]]]:
-    import pdfplumber
-
-    page_tables: list[list[list[str | None]]] = []
-    try:
-        with pdfplumber.open(path) as pdf:
-            for page in pdf.pages:
-                best_table: list[list[str | None]] | None = None
-                best_score = -1
-                for settings in TABLE_SETTINGS:
-                    for table in page.extract_tables(table_settings=settings) or []:
-                        if not table or len(table) < 2:
-                            continue
-                        score = _table_score(table)
-                        if score > best_score:
-                            best_score = score
-                            best_table = table
-                if best_table is not None:
-                    page_tables.append(best_table)
-    except Exception as exc:
-        raise ValueError(f"Could not read the PDF file: {exc}") from exc
-
-    groups: dict[tuple[str, ...], tuple[list[str], list[dict[str, str]], int]] = {}
-    for table in page_tables:
-        headers, rows = _table_to_dicts(table)
-        if len(headers) < 2 or not rows:
-            continue
-        key = tuple(header.lower() for header in headers)
-        if key not in groups:
-            groups[key] = (headers, [], 0)
-        group_headers, group_rows, group_score = groups[key]
-        group_rows.extend(rows)
-        groups[key] = (group_headers, group_rows, group_score + _table_score(table))
-
-    if groups:
-        headers, rows, _ = max(groups.values(), key=lambda item: (len(item[1]), item[2]))
-        return headers, rows
-
-    # Poppler's layout mode preserves statement columns better than a raw text
-    # dump. It runs as an external process, so it does not affect the
-    # free-threaded Python runtime.
-    layout_text = _pdftotext(path)
-    if layout_text:
-        rows = _parse_layout_text(layout_text)
-        if rows:
-            header_index = _find_header_index(rows)
-            return _rows_to_dicts(rows, header_index)
-
-    # Last resort: pdfplumber's layout text.
-    try:
-        with pdfplumber.open(path) as pdf:
-            combined = "\n".join(page.extract_text(layout=True) or "" for page in pdf.pages)
-        rows = _parse_layout_text(combined)
-        if rows:
-            header_index = _find_header_index(rows)
-            return _rows_to_dicts(rows, header_index)
-    except Exception as exc:
-        raise ValueError(f"Could not read the PDF file: {exc}") from exc
-
-    raise ValueError(
-        "Could not detect a table in this PDF. Export it as CSV or XLSX, or upload a "
-        "PDF with selectable text and a visible table."
-    )
+    stat = path.stat()
+    cached = _extract_pdf_rows_cached(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+    rows = [list(row) for row in cached]
+    if not rows:
+        raise ValueError(
+            "No statement rows could be read from this PDF. Make sure the pages show a visible "
+            "transaction table, and that the Tesseract language pack for the statement language "
+            "is installed."
+        )
+    return _normalise_pdf_rows(rows)
 
 
 def read_statement(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -339,14 +317,27 @@ def parse_amount(value: str) -> Decimal | None:
     return amount
 
 
+def _normalise_date_text(value: str) -> str:
+    text = value.strip().replace("\u2212", "-").replace("\u2013", "-")
+    compact = re.fullmatch(r"(\d{4})(\d{2})(\d{2})", text)
+    if compact:
+        return f"{compact.group(1)}-{compact.group(2)}-{compact.group(3)}"
+    return text
+
+
 def parse_date(value: str, preferred_format: str) -> date | None:
+    text = _normalise_date_text(value)
     formats = [preferred_format, *[fmt for fmt in DATE_FORMATS if fmt != preferred_format]]
     for fmt in formats:
         try:
-            return datetime.strptime(value.strip(), fmt).date()
+            return datetime.strptime(text, fmt).date()
         except ValueError:
             continue
     return None
+
+
+def _parse_known_date(value: str) -> date | None:
+    return parse_date(value, "%Y-%m-%d")
 
 
 def row_fingerprint(

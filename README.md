@@ -8,6 +8,8 @@ visualisations, and a dashboard you can actually edit.
 - [uv](https://docs.astral.sh/uv/)
 - CPython 3.14 free-threaded (`3.14t`)
 - Docker + Docker Compose (for PostgreSQL and Redis)
+- Tesseract OCR with the language packs you need (for PDF statement import
+  and its tests; bundled in the Docker image)
 
 ## Local setup
 
@@ -98,11 +100,18 @@ npm run build
 - After import, recurring payment patterns are detected and shown in a review
   page where you can register them as subscriptions.
 - Uploaded files are temporary and stored under `storage/imports/`.
-- PDF import uses pdfplumber table strategies first, then Poppler's
-  `pdftotext -layout` (installed in the Docker image) to preserve statement
-  columns. It is still best-effort: the PDF needs selectable text. Scanned
-  image-only PDFs require OCR and are not supported yet. If detection fails,
-  export the statement as CSV or XLSX.
+- PDF import always runs OCR: pages are rasterised with `pypdfium2`, table rules
+  are removed, and Tesseract reads the text. Scanned, photographed, and
+  image-only PDFs therefore work without a text layer. Digital PDFs go through
+  the same path.
+- OCR is language-aware via `OCR_LANGUAGE` (default `eng`). Install the matching
+  Tesseract language pack (for example `tesseract-ocr-deu`) in the image to
+  read other languages.
+- `OCR_SCALE` (default `4`) controls render resolution: raise it for small
+  print, lower it for speed. `OCR_MAX_PAGES` (default `25`) caps a single
+  upload; split larger statements.
+- OCR is best-effort: skewed pages, photos with heavy shadows, or multi-column
+  layouts can misread cells. Review the preview before confirming.
 
 ## Subscriptions
 

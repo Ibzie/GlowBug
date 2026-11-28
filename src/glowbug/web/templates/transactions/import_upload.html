@@ -1,23 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Import CSV · GlowBug{% endblock %}
+{% block title %}Import statement · GlowBug{% endblock %}
 {% block content %}
 <div class="narrow">
     <div class="hero">
         <p class="eyebrow">Transactions</p>
-        <h1>Import a CSV statement</h1>
+        <h1>Import a statement</h1>
         <p class="muted">
             Upload a CSV, XLSX, or PDF statement. You will map the date, description, and
             amount columns in the next step. Re-importing the same file will not create duplicates.
         </p>
         <p class="muted small">
-            PDF support is best-effort: the statement needs selectable text and a visible
-            table. If detection fails, export the statement as CSV or XLSX instead.
+            PDF statements are read with OCR, so scans and image-only exports work. Clear,
+            straight pages with a visible transaction table give the best results.
         </p>
     </div>
 
     <form method="post" action="/transactions/import/upload" enctype="multipart/form-data" class="card form">
         <label class="field">
-            <span>CSV file</span>
+            <span>Statement file</span>
             <input type="file" name="file"
                    accept=".csv,.xlsx,.xlsm,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
                    required>
