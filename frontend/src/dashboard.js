@@ -243,6 +243,14 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         ];
         const color = palette[index % palette.length];
         const explicitColors = Array.isArray(payload?.colors) ? payload.colors : [];
+        const kind =
+            dataset.kind ||
+            (dataset.label?.startsWith("Income")
+                ? "income"
+                : dataset.label?.startsWith("Expenses")
+                  ? "expenses"
+                  : null);
+        const secondaryAxis = dataset.axis === "y2";
         if (chartType === "doughnut" || chartType === "pie") {
             return {
                 ...dataset,
@@ -273,14 +281,17 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                 pointHoverRadius: 5,
             };
         }
-        if (dataset.label === "Income") {
+        if (kind === "income") {
             return {
                 ...dataset,
                 backgroundColor:
-                    chartType === "bar" ? hexAlpha(colors.success, 0.7) : gradientFill(colors.success),
+                    chartType === "bar"
+                        ? hexAlpha(colors.success, secondaryAxis ? 0.3 : 0.7)
+                        : gradientFill(colors.success, secondaryAxis ? 0.18 : 1),
                 borderColor: colors.success,
                 fill: chartType !== "bar",
-                borderWidth: chartType === "bar" ? 0 : 2,
+                borderWidth: chartType === "bar" ? (secondaryAxis ? 1 : 0) : 2,
+                borderDash: secondaryAxis && chartType !== "bar" ? [4, 3] : undefined,
                 borderRadius: chartType === "bar" ? 8 : 0,
                 maxBarThickness: 40,
                 tension: 0.35,
@@ -289,14 +300,17 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                 pointHoverBackgroundColor: colors.success,
             };
         }
-        if (dataset.label === "Expenses") {
+        if (kind === "expenses") {
             return {
                 ...dataset,
                 backgroundColor:
-                    chartType === "bar" ? hexAlpha(colors.error, 0.7) : gradientFill(colors.error),
+                    chartType === "bar"
+                        ? hexAlpha(colors.error, secondaryAxis ? 0.3 : 0.7)
+                        : gradientFill(colors.error, secondaryAxis ? 0.18 : 1),
                 borderColor: colors.error,
                 fill: chartType !== "bar",
-                borderWidth: chartType === "bar" ? 0 : 2,
+                borderWidth: chartType === "bar" ? (secondaryAxis ? 1 : 0) : 2,
+                borderDash: secondaryAxis && chartType !== "bar" ? [4, 3] : undefined,
                 borderRadius: chartType === "bar" ? 8 : 0,
                 maxBarThickness: 40,
                 tension: 0.35,
@@ -309,10 +323,13 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         return {
             ...dataset,
             backgroundColor:
-                chartType === "bar" ? hexAlpha(color, 0.72) : gradientFill(color),
+                chartType === "bar"
+                    ? hexAlpha(color, secondaryAxis ? 0.3 : 0.72)
+                    : gradientFill(color, secondaryAxis ? 0.18 : 1),
             borderColor: color,
             fill: chartType !== "bar",
-            borderWidth: chartType === "bar" ? 0 : 2,
+            borderWidth: chartType === "bar" ? (secondaryAxis ? 1 : 0) : 2,
+            borderDash: secondaryAxis && chartType !== "bar" ? [4, 3] : undefined,
             borderRadius: chartType === "bar" ? 8 : 0,
             maxBarThickness: 40,
             tension: 0.35,
@@ -409,9 +426,10 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                     ...tooltipStyle(colors),
                     callbacks: {
                         label(context) {
+                            const currency = context.dataset.currency || payload.currency;
                             return ` ${context.dataset.label}: ${formatMoney(
                                 context.parsed.y,
-                                payload.currency,
+                                currency,
                             )}`;
                         },
                     },
@@ -434,6 +452,23 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                         },
                     },
                 },
+                ...((payload.datasets || []).some((dataset) => dataset.axis === "y2") &&
+                payload.secondary_currency
+                    ? {
+                          y2: {
+                              position: "right",
+                              beginAtZero: true,
+                              grid: { drawOnChartArea: false },
+                              border: { display: false },
+                              ticks: {
+                                  color: colors.muted,
+                                  callback(value) {
+                                      return formatCompact(value, payload.secondary_currency);
+                                  },
+                              },
+                          },
+                      }
+                    : {}),
             },
         };
     }
@@ -688,7 +723,12 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             return;
         }
         const dual = select.querySelector('option[value="dual"]');
-        const allowDual = item?.type === "net_worth";
+        const allowDual = new Set([
+            "net_worth",
+            "account_balances",
+            "income_expense",
+            "cash_flow",
+        ]).has(item?.type);
         if (dual instanceof HTMLOptionElement) {
             dual.disabled = !allowDual;
         }

@@ -331,3 +331,146 @@ async def test_category_spend_uses_category_colours(session: AsyncSession) -> No
     assert data["labels"] == ["Food"]
     assert data["colors"] == ["#ff00aa"]
     assert data["datasets"][0]["data"] == [12.5]
+
+
+async def test_main_charts_include_secondary_currency(session: AsyncSession) -> None:
+    user = await make_user(session)
+    bank = await create_account(
+        session,
+        user,
+        account_type=AccountType.ASSET,
+        name="Bank",
+        currency_code="USD",
+        opening_balance=Decimal("1000"),
+    )
+    today = date.today()
+    session.add(
+        ExchangeRate(
+            base_code="USD",
+            quote_code="EUR",
+            as_of_date=today,
+            rate=Decimal("0.9"),
+            source="test",
+        )
+    )
+    await session.commit()
+
+    await create_transaction(
+        session,
+        user,
+        transaction_type="deposit",
+        journal_date=today,
+        description="Salary",
+        amount=Decimal("500"),
+        currency_code="USD",
+        account_id=bank.id,
+    )
+    await create_transaction(
+        session,
+        user,
+        transaction_type="withdrawal",
+        journal_date=today,
+        description="Groceries",
+        amount=Decimal("100"),
+        currency_code="USD",
+        account_id=bank.id,
+    )
+
+    dashboard = await get_or_create_default_dashboard(session, user)
+    start, end = today - timedelta(days=30), today
+
+    balances = next(widget for widget in dashboard.widgets if widget.type == "account_balances")
+    balance_data = await build_widget_data(session, user, balances, start, end)
+    assert balance_data["secondary_currency"] == "EUR"
+    assert [dataset["label"] for dataset in balance_data["datasets"]] == [
+        "Balance (USD)",
+        "Balance (EUR)",
+    ]
+    assert balance_data["datasets"][0]["data"] == [1400.0]
+    assert balance_data["datasets"][1]["data"] == [1260.0]
+    assert balance_data["datasets"][1]["axis"] == "y2"
+
+    income_expense = next(widget for widget in dashboard.widgets if widget.type == "income_expense")
+    income_data = await build_widget_data(session, user, income_expense, start, end)
+    assert [dataset["label"] for dataset in income_data["datasets"]] == [
+        "Income (USD)",
+        "Expenses (USD)",
+        "Income (EUR)",
+        "Expenses (EUR)",
+    ]
+    assert sum(income_data["datasets"][0]["data"]) == 500.0
+    assert sum(income_data["datasets"][1]["data"]) == 100.0
+    assert sum(income_data["datasets"][2]["data"]) == 450.0
+    assert sum(income_data["datasets"][3]["data"]) == 90.0
+
+    cash_flow = next(widget for widget in dashboard.widgets if widget.type == "cash_flow")
+    cash_data = await build_widget_data(session, user, cash_flow, start, end)
+    assert [dataset["label"] for dataset in cash_data["datasets"]] == [
+        "Net cash flow (USD)",
+        "Net cash flow (EUR)",
+    ]
+    assert cash_data["datasets"][0]["data"][-1] == 400.0
+    assert cash_data["datasets"][1]["data"][-1] == 360.0
+    assert cash_data["secondary_currency"] == "EUR"
+
+
+async def test_dual_chart_falls_back_without_secondary_currency(session: AsyncSession) -> None:
+    user = await make_user(session)
+    await set_user_currencies(session, user, enabled_codes=["USD"], primary_code="USD")
+    await session.commit()
+    await create_account(
+        session,
+        user,
+        account_type=AccountType.ASSET,
+        name="Bank",
+        currency_code="USD",
+        opening_balance=Decimal("1000"),
+    )
+
+    dashboard = await get_or_create_default_dashboard(session, user)
+    widget = next(widget for widget in dashboard.widgets if widget.type == "account_balances")
+    data = await build_widget_data(session, user, widget, date.today() - timedelta(days=30), date.today())
+
+    assert data["secondary_currency"] is None
+    assert len(data["datasets"]) == 1
+    assert "No secondary currency is configured." in data["warnings"]
+
+
+async def test_fx_widget_reports_missing_rate(session: AsyncSession) -> None:
+    user = await make_user(session)
+    dashboard = await get_or_create_default_dashboard(session, user)
+    widget = next(widget for widget in dashboard.widgets if widget.type == "fx_rate")
+    data = await build_widget_data(session, user, widget, date.today() - timedelta(days=30), date.today())
+
+    assert data["kind"] == "rates"
+    assert data["rows"][0]["rate"] is None
+    assert any("No USD/EUR rate" in warning for warning in data["warnings"])
+
+
+async def test_uncategorized_spend_uses_neutral_colour(session: AsyncSession) -> None:
+    user = await make_user(session)
+    bank = await create_account(
+        session,
+        user,
+        account_type=AccountType.ASSET,
+        name="Bank",
+        currency_code="USD",
+    )
+    today = date.today()
+    await create_transaction(
+        session,
+        user,
+        transaction_type="withdrawal",
+        journal_date=today,
+        description="Unknown merchant",
+        amount=Decimal("5"),
+        currency_code="USD",
+        account_id=bank.id,
+    )
+
+    dashboard = await get_or_create_default_dashboard(session, user)
+    widget = next(widget for widget in dashboard.widgets if widget.type == "category_spend")
+    data = await build_widget_data(session, user, widget, today - timedelta(days=30), today)
+
+    assert data["labels"] == ["Uncategorized"]
+    assert data["colors"] == ["#94a3b8"]

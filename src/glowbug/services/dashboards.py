@@ -52,7 +52,7 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
         "description": "Current balances across your accounts, converted to your primary currency.",
         "visualizations": ["bar"],
         "default_title": "Account balances",
-        "default_config": {"visualization": "bar", "currency_mode": "primary"},
+        "default_config": {"visualization": "bar", "currency_mode": "dual"},
         "default_size": {"w": 8, "h": 3},
     },
     {
@@ -61,7 +61,7 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
         "description": "Monthly income and spending.",
         "visualizations": ["bar"],
         "default_title": "Income vs expenses",
-        "default_config": {"visualization": "bar", "currency_mode": "primary", "period": "month"},
+        "default_config": {"visualization": "bar", "currency_mode": "dual", "period": "month"},
         "default_size": {"w": 6, "h": 3},
     },
     {
@@ -70,7 +70,7 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
         "description": "Monthly net cash flow.",
         "visualizations": ["line"],
         "default_title": "Cash flow",
-        "default_config": {"visualization": "line", "currency_mode": "primary", "period": "month"},
+        "default_config": {"visualization": "line", "currency_mode": "dual", "period": "month"},
         "default_size": {"w": 6, "h": 3},
     },
     {
@@ -367,10 +367,15 @@ async def build_widget_data(
         return {"kind": "error", "message": "No primary currency is configured."}
 
     config = normalize_config(widget.type, widget.config)
+    dual_requested = config.get("currency_mode") == "dual"
+    dual = dual_requested and secondary is not None
 
     if widget.type == "net_worth":
         data = await build_dashboard(session, user)
-        show_secondary = config.get("currency_mode") == "dual" and secondary is not None
+        show_secondary = dual
+        net_warnings = list(data.warnings)
+        if dual_requested and secondary is None:
+            net_warnings.append("No secondary currency is configured.")
         return {
             "kind": "number",
             "value": str(data.net_primary),
@@ -378,51 +383,128 @@ async def build_widget_data(
             "secondary_value": str(data.net_secondary) if show_secondary and data.net_secondary is not None else None,
             "secondary_currency": secondary.code if show_secondary and secondary is not None else None,
             "complete": data.net_primary_complete and (not show_secondary or data.net_secondary_complete),
-            "warnings": data.warnings,
+            "warnings": net_warnings,
         }
 
     if widget.type == "account_balances":
         data = await build_dashboard(session, user)
         labels = [view.account.name for view in data.accounts]
         values = [float(view.primary_balance) if view.primary_balance is not None else 0.0 for view in data.accounts]
+        datasets: list[dict[str, Any]] = [
+            {
+                "label": f"Balance ({primary.code})",
+                "data": values,
+                "currency": primary.code,
+                "axis": "y",
+            }
+        ]
+        balance_warnings = list(data.warnings)
+        secondary_code = None
+        if dual and secondary is not None:
+            secondary_code = secondary.code
+            datasets.append(
+                {
+                    "label": f"Balance ({secondary_code})",
+                    "data": [
+                        float(view.secondary_balance) if view.secondary_balance is not None else 0.0
+                        for view in data.accounts
+                    ],
+                    "currency": secondary_code,
+                    "axis": "y2",
+                }
+            )
+        elif dual_requested:
+            balance_warnings.append("No secondary currency is configured.")
+
         return {
             "kind": "chart",
             "chart": "bar",
             "labels": labels,
-            "datasets": [{"label": f"Balance ({primary.code})", "data": values}],
+            "datasets": datasets,
             "currency": primary.code,
-            "warnings": data.warnings,
+            "secondary_currency": secondary_code,
+            "warnings": balance_warnings,
         }
 
     if widget.type in {"income_expense", "cash_flow"}:
-        labels, income, expenses, warnings = await income_expense_series(
-            session,
-            user,
-            start,
-            end,
-            primary.code,
-        )
+        codes = [primary.code]
+        if dual and secondary is not None:
+            codes.append(secondary.code)
+        chart_warnings: set[str] = set()
+        if dual_requested and secondary is None:
+            chart_warnings.add("No secondary currency is configured.")
+
+        series: dict[str, tuple[list[str], list[Decimal], list[Decimal]]] = {}
+        labels: list[str] = []
+        for code in codes:
+            labels, income, expenses, series_warnings = await income_expense_series(
+                session,
+                user,
+                start,
+                end,
+                code,
+            )
+            series[code] = (labels, income, expenses)
+            chart_warnings.update(series_warnings)
+
+        secondary_code = secondary.code if dual and secondary is not None else None
+
         if widget.type == "income_expense":
+            datasets: list[dict[str, Any]] = []
+            for code in codes:
+                _labels, income, expenses = series[code]
+                axis = "y" if code == primary.code else "y2"
+                label_suffix = "" if len(codes) == 1 else f" ({code})"
+                datasets.append(
+                    {
+                        "label": f"Income{label_suffix}",
+                        "data": [float(value) for value in income],
+                        "currency": code,
+                        "kind": "income",
+                        "axis": axis,
+                    }
+                )
+                datasets.append(
+                    {
+                        "label": f"Expenses{label_suffix}",
+                        "data": [float(value) for value in expenses],
+                        "currency": code,
+                        "kind": "expenses",
+                        "axis": axis,
+                    }
+                )
             return {
                 "kind": "chart",
                 "chart": "bar",
                 "labels": labels,
-                "datasets": [
-                    {"label": "Income", "data": [float(value) for value in income]},
-                    {"label": "Expenses", "data": [float(value) for value in expenses]},
-                ],
+                "datasets": datasets,
                 "currency": primary.code,
-                "warnings": warnings,
+                "secondary_currency": secondary_code,
+                "warnings": sorted(chart_warnings),
             }
 
-        net = [income_value - expense_value for income_value, expense_value in zip(income, expenses, strict=True)]
+        datasets = []
+        for code in codes:
+            _labels, income, expenses = series[code]
+            net = [income_value - expense_value for income_value, expense_value in zip(income, expenses, strict=True)]
+            axis = "y" if code == primary.code else "y2"
+            label_suffix = "" if len(codes) == 1 else f" ({code})"
+            datasets.append(
+                {
+                    "label": f"Net cash flow{label_suffix}",
+                    "data": [float(value) for value in net],
+                    "currency": code,
+                    "axis": axis,
+                }
+            )
         return {
             "kind": "chart",
             "chart": "line",
             "labels": labels,
-            "datasets": [{"label": "Net cash flow", "data": [float(value) for value in net]}],
+            "datasets": datasets,
             "currency": primary.code,
-            "warnings": warnings,
+            "secondary_currency": secondary_code,
+            "warnings": sorted(chart_warnings),
         }
 
     if widget.type == "balance_sections":
@@ -456,7 +538,9 @@ async def build_widget_data(
         }
 
     if widget.type == "category_spend":
-        labels, values, category_colors, warnings = await category_spend_series(session, user, start, end, primary.code)
+        labels, values, category_colors, spending_warnings = await category_spend_series(
+            session, user, start, end, primary.code
+        )
         chart = config.get("visualization")
         if chart not in {"doughnut", "bar"}:
             chart = "doughnut"
@@ -467,7 +551,7 @@ async def build_widget_data(
             "datasets": [{"label": f"Spending ({primary.code})", "data": values}],
             "colors": category_colors,
             "currency": primary.code,
-            "warnings": warnings,
+            "warnings": spending_warnings,
         }
 
     if widget.type == "tax_summary":

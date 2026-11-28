@@ -406,9 +406,12 @@ async def dashboard(request: Request, session: SessionDep) -> HTMLResponse | Red
     dashboard = await get_or_create_default_dashboard(session, user)
     requested_range = request.query_params.get("range")
     if requested_range is not None:
-        range_key = requested_range.upper()
-        if range_key in VALID_RANGES:
-            request.session["dashboard_range"] = range_key
+        candidate = requested_range.upper()
+        if candidate in VALID_RANGES:
+            request.session["dashboard_range"] = candidate
+            range_key = candidate
+        else:
+            range_key = str(request.session.get("dashboard_range", "6M")).upper()
     else:
         range_key = str(request.session.get("dashboard_range", "6M")).upper()
     if range_key not in VALID_RANGES:

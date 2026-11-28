@@ -557,6 +557,11 @@ async def test_dashboard_range_persists(client: httpx.AsyncClient) -> None:
     assert response.status_code == 200
     assert '<option value="1Y" selected>' in response.text
 
+    # An invalid range must not wipe the remembered valid range.
+    response = await client.get("/?range=NOT_A_RANGE")
+    assert response.status_code == 200
+    assert '<option value="1Y" selected>' in response.text
+
 
 async def test_transaction_filters_persist_across_category_save(
     client: httpx.AsyncClient,
@@ -605,3 +610,16 @@ async def test_transaction_filters_persist_across_category_save(
     )
     assert response.status_code == 303
     assert response.headers["location"] == "/transactions?range=1M&uncategorized=1"
+
+
+async def test_invalid_transaction_filters_fall_back(client: httpx.AsyncClient) -> None:
+    await complete_setup(client)
+
+    response = await client.get("/transactions?range=NOT_A_RANGE&category=not-a-uuid")
+    assert response.status_code == 200
+    assert '<option value="3M" selected>' in response.text
+
+    response = await client.get("/transactions")
+    assert response.status_code == 200
+    assert '<option value="3M" selected>' in response.text
+    assert '<option value="">All categories</option>' in response.text
