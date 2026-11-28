@@ -500,9 +500,10 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             type: payload.chart,
             data: {
                 labels: payload.labels || [],
-                datasets: (payload.datasets || []).map((dataset, index) =>
-                    styleDataset(dataset, index, payload.chart, payload, colors),
-                ),
+                datasets: (payload.datasets || []).map((dataset, index) => ({
+                    ...styleDataset(dataset, index, payload.chart, payload, colors),
+                    yAxisID: dataset.axis === "y2" ? "y2" : "y",
+                })),
             },
             options: chartOptions(payload, colors),
             plugins,
