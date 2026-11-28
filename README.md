@@ -49,6 +49,24 @@ Open [http://localhost:8000](http://localhost:8000) for the first-run setup:
 Missing exchange rates return `404` or an explicit “Incomplete — missing rate”
 label. They are never silently treated as `1.0`.
 
+## Dashboard
+
+The default dashboard is editable:
+
+- **Edit dashboard** enables drag, resize, add, remove, and per-widget settings.
+- Widgets: net worth, account balances, income vs expenses, cash flow, recent
+  transactions, and exchange rate.
+- Global range presets: 1M, 3M, 6M, YTD, 1Y, All.
+- Layouts are saved per dashboard; drag/resize changes persist automatically.
+
+The dashboard is a small Vite island in `frontend/` using Gridstack and Chart.js.
+Rebuild it after frontend changes:
+
+```bash
+cd frontend
+npm run build
+```
+
 ## Exchange rates
 
 Rates come from **Frankfurter v2** only. There is no fallback provider.
