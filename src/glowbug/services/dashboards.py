@@ -456,7 +456,7 @@ async def build_widget_data(
         }
 
     if widget.type == "category_spend":
-        labels, values, warnings = await category_spend_series(session, user, start, end, primary.code)
+        labels, values, category_colors, warnings = await category_spend_series(session, user, start, end, primary.code)
         chart = config.get("visualization")
         if chart not in {"doughnut", "bar"}:
             chart = "doughnut"
@@ -465,6 +465,7 @@ async def build_widget_data(
             "chart": chart,
             "labels": labels,
             "datasets": [{"label": f"Spending ({primary.code})", "data": values}],
+            "colors": category_colors,
             "currency": primary.code,
             "warnings": warnings,
         }
@@ -512,13 +513,22 @@ async def build_widget_data(
                 rate_warnings.add(f"No {primary.code}/{quote} rate for {end.isoformat()}.")
                 continue
 
+            invert = rate < 1
+            display_base = quote if invert else primary.code
+            display_quote = primary.code if invert else quote
+            display_rate = (Decimal("1") / rate) if invert and rate != 0 else rate
+
             changes: dict[str, dict[str, str | None]] = {}
             for label, days in (("7d", 7), ("30d", 30)):
                 try:
                     previous, _ = await service.get_rate(primary.code, quote, end - timedelta(days=days))
                 except RateUnavailableError:
                     continue
-                delta = rate - previous
+                if invert:
+                    if previous == 0:
+                        continue
+                    previous = Decimal("1") / previous
+                delta = display_rate - previous
                 percent = (delta / previous * Decimal("100")) if previous != 0 else None
                 changes[label] = {
                     "delta": str(delta),
@@ -527,8 +537,9 @@ async def build_widget_data(
 
             rate_rows.append(
                 {
-                    "quote": quote,
-                    "rate": str(rate),
+                    "base": display_base,
+                    "quote": display_quote,
+                    "rate": str(display_rate),
                     "rate_date": rate_date.isoformat(),
                     "changes": changes,
                 }
@@ -633,10 +644,11 @@ async def category_spend_series(
     start: date,
     end: date,
     primary_code: str,
-) -> tuple[list[str], list[float], list[str]]:
+) -> tuple[list[str], list[float], list[str], list[str]]:
     statement = (
         select(
             Category.name,
+            Category.color,
             TransactionJournal.currency_code,
             TransactionJournal.date,
             Transaction.amount,
@@ -654,6 +666,7 @@ async def category_spend_series(
     )
     rows = (await session.execute(statement)).all()
     totals: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    category_colors: dict[str, str] = {}
     converter = ExchangeRateService(session)
     cache: dict[tuple[str, date], Decimal | None] = {}
     warnings: set[str] = set()
@@ -675,12 +688,17 @@ async def category_spend_series(
             if rate is None:
                 continue
             amount *= rate
-        totals[row.name or "Uncategorized"] += amount
+        name = row.name or "Uncategorized"
+        totals[name] += amount
+        if row.name and row.color:
+            category_colors[name] = row.color
 
     ordered = sorted(totals.items(), key=lambda item: item[1], reverse=True)
+    labels = [name for name, _ in ordered]
     return (
-        [name for name, _ in ordered],
+        labels,
         [float(value) for _, value in ordered],
+        [category_colors.get(name, "#94a3b8") for name in labels],
         sorted(warnings),
     )
 

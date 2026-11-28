@@ -242,8 +242,8 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             "#fb923c",
         ];
         const color = palette[index % palette.length];
+        const explicitColors = Array.isArray(payload?.colors) ? payload.colors : [];
         if (chartType === "doughnut" || chartType === "pie") {
-            const explicitColors = Array.isArray(payload?.colors) ? payload.colors : [];
             return {
                 ...dataset,
                 backgroundColor: (dataset.data || []).map(
@@ -254,6 +254,23 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                 borderRadius: 4,
                 spacing: 2,
                 hoverOffset: 6,
+            };
+        }
+        if (chartType === "bar" && explicitColors.length > 0) {
+            const pointColors = (dataset.data || []).map(
+                (_, itemIndex) => explicitColors[itemIndex] || palette[itemIndex % palette.length],
+            );
+            return {
+                ...dataset,
+                backgroundColor: pointColors.map((pointColor) => hexAlpha(pointColor, 0.72)),
+                borderColor: pointColors,
+                fill: false,
+                borderWidth: 0,
+                borderRadius: 8,
+                maxBarThickness: 40,
+                tension: 0.35,
+                pointRadius: 0,
+                pointHoverRadius: 5,
             };
         }
         if (dataset.label === "Income") {
@@ -553,7 +570,7 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             const tr = document.createElement("tr");
 
             const pair = document.createElement("td");
-            pair.textContent = `${payload.base} → ${row.quote}`;
+            pair.textContent = `${row.base || payload.base} → ${row.quote}`;
             tr.appendChild(pair);
 
             const rate = document.createElement("td");
@@ -586,10 +603,10 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         table.appendChild(tbody);
         wrapper.appendChild(table);
 
-        if (payload.base) {
+        if (payload.as_of) {
             const note = document.createElement("p");
             note.className = "widget-rate-note";
-            note.textContent = `Base ${payload.base}${payload.as_of ? ` · ${payload.as_of}` : ""}`;
+            note.textContent = `Rates as of ${payload.as_of}`;
             wrapper.appendChild(note);
         }
 

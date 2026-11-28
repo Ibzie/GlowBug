@@ -13,11 +13,13 @@ from glowbug.models.exchange_rate import ExchangeRate
 from glowbug.models.user import User
 from glowbug.security import require_api_user
 from glowbug.services.accounts import create_account, set_user_currencies
+from glowbug.services.categories import create_category
 from glowbug.services.dashboards import (
     build_widget_data,
     get_or_create_default_dashboard,
 )
 from glowbug.services.ledger import Split, post_journal
+from glowbug.services.transactions import create_transaction
 
 
 async def ensure_currency(session: AsyncSession, code: str, symbol: str) -> None:
@@ -167,9 +169,9 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
     assert response.status_code == 200
     fx_payload = response.json()
     assert fx_payload["kind"] == "rates"
-    assert fx_payload["base"] == "USD"
-    assert fx_payload["rows"][0]["quote"] == "EUR"
-    assert Decimal(fx_payload["rows"][0]["rate"]) == Decimal("0.9")
+    assert fx_payload["rows"][0]["base"] == "EUR"
+    assert fx_payload["rows"][0]["quote"] == "USD"
+    assert Decimal(fx_payload["rows"][0]["rate"]) > Decimal("1")
     assert fx_payload["rows"][0]["changes"] == {}
 
     response = await client.patch(f"/api/widgets/{widget['id']}", json={"title": "Rate"})
@@ -289,8 +291,43 @@ async def test_exchange_rate_widget_shows_movements(session: AsyncSession) -> No
     data = await build_widget_data(session, user, widget, today - timedelta(days=30), today)
 
     row = data["rows"][0]
-    assert row["quote"] == "EUR"
-    assert Decimal(row["rate"]) == Decimal("0.90")
-    assert Decimal(row["changes"]["7d"]["delta"]) == Decimal("0.10")
-    assert Decimal(row["changes"]["7d"]["percent"]) == Decimal("12.50")
-    assert Decimal(row["changes"]["30d"]["delta"]) == Decimal("0.05")
+    assert row["base"] == "EUR"
+    assert row["quote"] == "USD"
+    assert Decimal(row["rate"]).quantize(Decimal("0.0001")) == Decimal("1.1111")
+    assert Decimal(row["changes"]["7d"]["delta"]) < 0
+    assert Decimal(row["changes"]["7d"]["percent"]) == Decimal("-11.11")
+    assert Decimal(row["changes"]["30d"]["delta"]) < 0
+
+
+async def test_category_spend_uses_category_colours(session: AsyncSession) -> None:
+    user = await make_user(session)
+    bank = await create_account(
+        session,
+        user,
+        account_type=AccountType.ASSET,
+        name="Bank",
+        currency_code="USD",
+    )
+    food = await create_category(session, user, "Food", color="#ff00aa")
+    await session.commit()
+
+    today = date.today()
+    await create_transaction(
+        session,
+        user,
+        transaction_type="withdrawal",
+        journal_date=today,
+        description="Lunch",
+        amount=Decimal("12.50"),
+        currency_code="USD",
+        account_id=bank.id,
+        category_id=food.id,
+    )
+
+    dashboard = await get_or_create_default_dashboard(session, user)
+    widget = next(widget for widget in dashboard.widgets if widget.type == "category_spend")
+    data = await build_widget_data(session, user, widget, today - timedelta(days=30), today)
+
+    assert data["labels"] == ["Food"]
+    assert data["colors"] == ["#ff00aa"]
+    assert data["datasets"][0]["data"] == [12.5]
