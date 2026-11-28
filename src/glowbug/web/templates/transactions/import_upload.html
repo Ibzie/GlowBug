@@ -6,15 +6,21 @@
         <p class="eyebrow">Transactions</p>
         <h1>Import a CSV statement</h1>
         <p class="muted">
-            Upload a CSV with a header row. You will map the date, description, and amount
-            columns in the next step. Re-importing the same file will not create duplicates.
+            Upload a CSV, XLSX, or PDF statement. You will map the date, description, and
+            amount columns in the next step. Re-importing the same file will not create duplicates.
+        </p>
+        <p class="muted small">
+            PDF support is best-effort: the statement needs selectable text and a visible
+            table. If detection fails, export the statement as CSV or XLSX instead.
         </p>
     </div>
 
     <form method="post" action="/transactions/import/upload" enctype="multipart/form-data" class="card form">
         <label class="field">
             <span>CSV file</span>
-            <input type="file" name="file" accept=".csv,text/csv" required>
+            <input type="file" name="file"
+                   accept=".csv,.xlsx,.xlsm,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
+                   required>
         </label>
         <p class="muted small">
             Typical columns: date, description, amount. A currency or category column is optional.

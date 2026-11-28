@@ -98,6 +98,132 @@ def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     return headers, rows
 
 
+def _cell_to_string(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value).strip()
+
+
+def _unique_headers(values: list[str], width: int) -> list[str]:
+    headers: list[str] = []
+    seen: dict[str, int] = {}
+    for index in range(width):
+        raw = values[index].strip() if index < len(values) else ""
+        base = raw or f"Column {index + 1}"
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        headers.append(base if count == 0 else f"{base} ({count + 1})")
+    return headers
+
+
+def _find_header_index(rows: list[list[str]]) -> int:
+    keywords = ("date", "description", "details", "amount", "debit", "credit", "balance")
+    for index, row in enumerate(rows[:30]):
+        non_empty = [value for value in row if value]
+        if len(non_empty) < 2:
+            continue
+        joined = " ".join(value.lower() for value in non_empty)
+        if any(keyword in joined for keyword in keywords):
+            return index
+    for index, row in enumerate(rows):
+        if len([value for value in row if value]) >= 2:
+            return index
+    return 0
+
+
+def _rows_to_dicts(
+    rows: list[list[str]],
+    header_index: int,
+) -> tuple[list[str], list[dict[str, str]]]:
+    if not rows:
+        raise ValueError("The file has no rows.")
+    header_row = rows[header_index]
+    width = max(len(header_row), max((len(row) for row in rows[header_index + 1 :]), default=0))
+    headers = _unique_headers(header_row, width)
+    data_rows: list[dict[str, str]] = []
+    for values in rows[header_index + 1 :]:
+        row = {headers[index]: values[index] if index < len(values) else "" for index in range(len(headers))}
+        if any(row.values()):
+            data_rows.append(row)
+    return headers, data_rows
+
+
+def read_xlsx(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    from openpyxl import load_workbook
+
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=True)
+    except Exception as exc:
+        raise ValueError(f"Could not read the XLSX file: {exc}") from exc
+
+    try:
+        sheet = workbook.active
+        if sheet is None:
+            raise ValueError("The XLSX file has no active sheet.")
+        raw_rows: list[list[str]] = []
+        for values in sheet.iter_rows(values_only=True):
+            row = [_cell_to_string(value) for value in values]
+            if any(row):
+                raw_rows.append(row)
+    finally:
+        workbook.close()
+
+    if not raw_rows:
+        raise ValueError("The XLSX file has no rows.")
+    header_index = _find_header_index(raw_rows)
+    return _rows_to_dicts(raw_rows, header_index)
+
+
+def read_pdf(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    import pdfplumber
+
+    try:
+        with pdfplumber.open(path) as pdf:
+            tables: list[list[list[str | None]]] = []
+            text_rows: list[list[str]] = []
+            for page in pdf.pages:
+                for table in page.extract_tables() or []:
+                    if table and len(table) >= 2:
+                        tables.append(table)
+                text = page.extract_text() or ""
+                for line in text.splitlines():
+                    parts = [part.strip() for part in line.split("  ") if part.strip()]
+                    if len(parts) >= 3:
+                        text_rows.append(parts)
+    except Exception as exc:
+        raise ValueError(f"Could not read the PDF file: {exc}") from exc
+
+    if tables:
+        table = max(tables, key=len)
+        rows = [[_cell_to_string(cell) for cell in row] for row in table]
+        header_index = _find_header_index(rows)
+        return _rows_to_dicts(rows, header_index)
+
+    if text_rows:
+        header_index = _find_header_index(text_rows)
+        return _rows_to_dicts(text_rows, header_index)
+
+    raise ValueError(
+        "Could not detect a table in this PDF. Export it as CSV or XLSX, or upload a "
+        "PDF with selectable text and a visible table."
+    )
+
+
+def read_statement(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return read_csv(path)
+    if suffix in {".xlsx", ".xlsm"}:
+        return read_xlsx(path)
+    if suffix == ".pdf":
+        return read_pdf(path)
+    raise ValueError("Unsupported file type. Upload CSV, XLSX, or PDF.")
+
+
 def parse_amount(value: str) -> Decimal | None:
     text = value.strip().replace("\u00a0", "")
     negative = text.startswith("(") and text.endswith(")")
@@ -149,7 +275,7 @@ def row_fingerprint(
 
 
 def parse_rows(path: Path, mapping: ImportMapping, account: Account) -> ImportParseResult:
-    _, raw_rows = read_csv(path)
+    _, raw_rows = read_statement(path)
     result = ImportParseResult()
 
     for index, raw in enumerate(raw_rows, start=2):

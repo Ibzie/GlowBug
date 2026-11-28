@@ -78,15 +78,28 @@ npm run build
 - The dashboard includes a **Spending by category** widget, and the recent
   transactions widget shows each transaction's category.
 
-## CSV import
+## Taxes
 
-- `/transactions/import`: upload a statement, map its columns, preview parsed
-  rows, then import.
+- `/taxes`: tax estimates by year, with a primary and per-profile breakdown.
+- Tax profiles define a name, percentage rate, currency, tax year, and the
+  **deposit categories** that count as taxable income.
+- The page shows taxable income, estimated tax, paid, and remaining, plus a
+  category-level breakdown.
+- Record tax payments against a profile; payments reduce the remaining balance.
+- The dashboard includes a **Tax estimate** widget for new dashboards; existing
+  dashboards can add it via **Edit dashboard → Add widget**.
+
+## Statement import
+
+- `/transactions/import`: upload **CSV, XLSX, or PDF**, map its columns, preview
+  parsed rows, then import.
 - Imports are **idempotent**: each row gets a SHA-256 fingerprint and re-importing
   the same statement skips existing rows.
 - After import, recurring payment patterns are detected and shown in a review
   page where you can register them as subscriptions.
 - Uploaded files are temporary and stored under `storage/imports/`.
+- PDF import is best-effort: the PDF needs selectable text and a visible table.
+  If table detection fails, export the statement as CSV or XLSX.
 
 ## Subscriptions
 

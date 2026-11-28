@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Taxes · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Taxes</p>
+            <h1>Tax estimates</h1>
+            <p class="muted">
+                Taxable income is calculated from deposit transactions in the categories you select.
+            </p>
+        </div>
+        <div class="actions">
+            <form method="get" action="/taxes" class="inline-form">
+                <select name="year" onchange="this.form.submit()">
+                    {% for candidate in range(year - 2, year + 3) %}
+                        <option value="{{ candidate }}" {% if candidate == year %}selected{% endif %}>{{ candidate }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <a class="btn" href="/taxes/profiles/new?year={{ year }}">New tax profile</a>
+        </div>
+    </div>
+
+    {% if summary.primary_currency %}
+        <div class="stat-grid">
+            <div class="stat">
+                <span class="stat-label">Taxable income · {{ summary.primary_currency.code }}</span>
+                <strong class="stat-value">{{ format_money(summary.taxable_income, summary.primary_currency.code, user.locale) }}</strong>
+            </div>
+            <div class="stat stat-alt">
+                <span class="stat-label">Estimated tax · {{ summary.primary_currency.code }}</span>
+                <strong class="stat-value">{{ format_money(summary.estimated_tax, summary.primary_currency.code, user.locale) }}</strong>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Paid</span>
+                <strong class="stat-value">{{ format_money(summary.paid, summary.primary_currency.code, user.locale) }}</strong>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Remaining</span>
+                <strong class="stat-value">{{ format_money(summary.remaining, summary.primary_currency.code, user.locale) }}</strong>
+            </div>
+        </div>
+        <p class="muted small">
+            All deposit income in {{ year }}:
+            {{ format_money(summary.total_income, summary.primary_currency.code, user.locale) }}
+        </p>
+    {% else %}
+        <div class="flash flash-warning">No primary currency is configured.</div>
+    {% endif %}
+
+    {% if summary.warnings %}
+        <div class="flash flash-warning">
+            {% for warning in summary.warnings %}<div>{{ warning }}</div>{% endfor %}
+        </div>
+    {% endif %}
+
+    {% if summary.profiles %}
+        <div class="stack">
+            {% for item in summary.profiles %}
+                <article class="card tax-card">
+                    <div class="row-between">
+                        <div>
+                            <h2>{{ item.profile.name }}</h2>
+                            <p class="muted small">
+                                {{ item.profile.rate }}% · {{ item.profile.currency_code }} · {{ item.profile.tax_year }}
+                                {% if not item.profile.is_active %}<span class="badge">paused</span>{% endif %}
+                            </p>
+                        </div>
+                        <div class="actions">
+                            <a class="btn btn-secondary btn-tiny" href="/taxes/profiles/{{ item.profile.id }}/payments/new">Record payment</a>
+                            <a class="btn btn-secondary btn-tiny" href="/taxes/profiles/{{ item.profile.id }}/edit">Edit</a>
+                            <form method="post" action="/taxes/profiles/{{ item.profile.id }}/delete" class="inline-form"
+                                  onsubmit="return confirm('Delete this tax profile and its payments?');">
+                                <button type="submit" class="link-button danger">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="stat-grid tax-stats">
+                        <div class="stat">
+                            <span class="stat-label">Taxable income</span>
+                            <strong class="stat-value">{{ format_money(item.taxable_income, item.profile.currency_code, user.locale) }}</strong>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Estimated tax</span>
+                            <strong class="stat-value">{{ format_money(item.estimated_tax, item.profile.currency_code, user.locale) }}</strong>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Paid</span>
+                            <strong class="stat-value">{{ format_money(item.paid, item.profile.currency_code, user.locale) }}</strong>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Remaining</span>
+                            <strong class="stat-value">{{ format_money(item.remaining, item.profile.currency_code, user.locale) }}</strong>
+                        </div>
+                    </div>
+
+                    {% if item.category_totals %}
+                        <div class="section-heading">
+                            <h3>Category breakdown</h3>
+                        </div>
+                        <div class="table-card">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th class="right">Taxable income</th>
+                                    <th class="right">Tax at {{ item.profile.rate }}%</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for total in item.category_totals %}
+                                    <tr>
+                                        <td><span class="color-dot" style="background: {{ total.category.color }}"></span>{{ total.category.name }}</td>
+                                        <td class="right">{{ format_money(total.income, item.profile.currency_code, user.locale) }}</td>
+                                        <td class="right">{{ format_money(total.tax, item.profile.currency_code, user.locale) }}</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="muted">No taxable income found in the selected categories yet.</p>
+                    {% endif %}
+
+                    {% if item.profile.payments %}
+                        <div class="section-heading">
+                            <h3>Payments</h3>
+                        </div>
+                        <div class="payment-list">
+                            {% for payment in item.profile.payments %}
+                                <div class="payment-row">
+                                    <span>{{ payment.paid_on }}</span>
+                                    <strong>{{ format_money(payment.amount, item.profile.currency_code, user.locale) }}</strong>
+                                    {% if payment.note %}<span class="muted">{{ payment.note }}</span>{% endif %}
+                                    <form method="post" action="/taxes/payments/{{ payment.id }}/delete" class="inline-form">
+                                        <button type="submit" class="link-button danger">Remove</button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% if item.warnings %}
+                        <div class="flash flash-warning">
+                            {% for warning in item.warnings %}<div>{{ warning }}</div>{% endfor %}
+                        </div>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card empty">
+            <p>No tax profiles for {{ year }} yet.</p>
+            <a class="btn" href="/taxes/profiles/new?year={{ year }}">Create your first tax profile</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

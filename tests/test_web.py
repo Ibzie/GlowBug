@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from decimal import Decimal
 from urllib.parse import urlencode
 
 import httpx
@@ -8,10 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from glowbug.models.account import Account
 from glowbug.models.category import Category
+from glowbug.models.tax import TaxProfile
 from glowbug.models.transaction import TransactionJournal
 from glowbug.models.user import User, UserCurrency
 from glowbug.services.accounts import get_primary_currency, get_secondary_currency
 from glowbug.services.settings import set_setting
+from glowbug.services.transactions import create_transaction
 
 SETUP_DATA = {
     "email": "ibzie@example.com",
@@ -367,6 +370,75 @@ async def test_categories_seeded_and_custom_category(client: httpx.AsyncClient) 
     response = await client.get("/categories")
     assert response.status_code == 200
     assert "Coffee" in response.text
+
+
+async def test_taxes_page_and_profile(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    await complete_setup(client)
+    user = await session.scalar(select(User).where(User.email == SETUP_DATA["email"]))
+    assert user is not None
+    account = await session.scalar(select(Account).where(Account.user_id == user.id, Account.name == "Bank"))
+    assert account is not None
+    income = await session.scalar(
+        select(Category).where(Category.user_id == user.id, Category.normalized_name == "income")
+    )
+    assert income is not None
+
+    await create_transaction(
+        session,
+        user,
+        transaction_type="deposit",
+        journal_date=date.today(),
+        description="Salary",
+        amount=Decimal("1000"),
+        currency_code=account.currency_code,
+        account_id=account.id,
+        category_id=income.id,
+    )
+
+    response = await client.get("/taxes")
+    assert response.status_code == 200
+    assert "Tax estimates" in response.text
+
+    year = date.today().year
+    response = await post_form(
+        client,
+        "/taxes/profiles",
+        {
+            "name": ["Income tax"],
+            "rate": ["20"],
+            "currency_code": [account.currency_code],
+            "tax_year": [str(year)],
+            "category_ids": [str(income.id)],
+            "is_active": ["1"],
+        },
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/taxes?year={year}"
+
+    response = await client.get(f"/taxes?year={year}")
+    assert "Income tax" in response.text
+    assert "Estimated tax" in response.text
+
+    profile = await session.scalar(
+        select(TaxProfile).where(TaxProfile.user_id == user.id, TaxProfile.name == "Income tax")
+    )
+    assert profile is not None
+    response = await post_form(
+        client,
+        f"/taxes/profiles/{profile.id}/payments",
+        {
+            "amount": ["50"],
+            "paid_on": [date.today().isoformat()],
+            "note": ["First payment"],
+        },
+    )
+    assert response.status_code == 303
+
+    response = await client.get(f"/taxes?year={year}")
+    assert "First payment" in response.text
 
 
 async def test_setup_rejects_mismatched_passwords(client: httpx.AsyncClient) -> None:

@@ -22,7 +22,7 @@ from glowbug.services.importer import (
     existing_fingerprints,
     import_rows,
     parse_rows,
-    read_csv,
+    read_statement,
 )
 from glowbug.services.subscriptions import detect_candidates
 from glowbug.web.routes import flash, render
@@ -32,6 +32,16 @@ router = APIRouter(tags=["imports"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 IMPORT_DIR = Path("storage/imports")
+SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xlsm", ".pdf"}
+
+
+def import_path(token: str) -> Path | None:
+    if not token or not token.isalnum():
+        return None
+    for path in IMPORT_DIR.glob(f"{token}.*"):
+        if path.is_file():
+            return path
+    return None
 
 
 def mapping_from_form(form) -> ImportMapping:  # type: ignore[no-untyped-def]
@@ -93,13 +103,26 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
             status_code=400,
         )
 
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_EXTENSIONS:
+        return render(
+            request,
+            "transactions/import_upload.html",
+            {
+                "user": user,
+                "accounts": accounts,
+                "error": "Upload a CSV, XLSX, or PDF statement.",
+            },
+            status_code=400,
+        )
+
     IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     token = uuid4().hex
-    path = IMPORT_DIR / f"{token}.csv"
+    path = IMPORT_DIR / f"{token}{suffix}"
     path.write_bytes(content)
 
     try:
-        headers, rows = read_csv(path)
+        headers, rows = read_statement(path)
     except ValueError as exc:
         path.unlink(missing_ok=True)
         return render(
@@ -133,7 +156,7 @@ async def import_preview(request: Request, session: SessionDep) -> HTMLResponse 
 
     form = await request.form()
     token = str(form.get("token", "")) or str(request.session.get("import_token", ""))
-    path = IMPORT_DIR / f"{token}.csv"
+    path = import_path(token)
     accounts = await list_accounts(session, user.id)
 
     try:
@@ -154,7 +177,7 @@ async def import_preview(request: Request, session: SessionDep) -> HTMLResponse 
             {"user": user, "accounts": accounts, "error": "Choose a valid account."},
             status_code=400,
         )
-    if not path.exists():
+    if path is None or not path.exists():
         return render(
             request,
             "transactions/import_upload.html",
@@ -204,7 +227,7 @@ async def import_confirm(request: Request, session: SessionDep) -> HTMLResponse 
 
     form = await request.form()
     token = str(form.get("token", ""))
-    path = IMPORT_DIR / f"{token}.csv"
+    path = import_path(token)
     try:
         mapping = mapping_from_form(form)
     except ValueError as exc:
@@ -212,7 +235,7 @@ async def import_confirm(request: Request, session: SessionDep) -> HTMLResponse 
         return RedirectResponse("/transactions/import", status_code=303)
 
     account = await session.get(Account, mapping.account_id)
-    if account is None or account.user_id != user.id or not path.exists():
+    if account is None or account.user_id != user.id or path is None or not path.exists():
         flash(request, "The upload expired. Please upload the file again.", "error")
         return RedirectResponse("/transactions/import", status_code=303)
 

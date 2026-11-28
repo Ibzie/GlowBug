@@ -340,6 +340,60 @@ select:focus {
     margin: 18px 0 8px;
 }
 
+.tax-stats {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.tax-card h2,
+.tax-card h3 {
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.check-list {
+    max-height: 320px;
+    overflow: auto;
+    padding: 6px;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.check-row:hover {
+    background: var(--surface);
+}
+
+.check-row input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+.payment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.payment-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    background: var(--surface-muted);
+    border-radius: 9px;
+    font-size: 0.85rem;
+}
+
 .stat {
     padding: 20px;
     background: var(--surface);

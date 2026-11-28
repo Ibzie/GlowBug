@@ -175,6 +175,9 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
                     formatMoney(payload.secondary_value, payload.secondary_currency),
                 )}</span>`;
             }
+            if (payload.subtitle) {
+                wrapper.innerHTML += `<span class="number-sub">${escapeHtml(payload.subtitle)}</span>`;
+            }
             if (payload.complete === false) {
                 wrapper.innerHTML += `<span class="warning-text">Incomplete — missing rate</span>`;
             }

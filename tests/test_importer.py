@@ -2,6 +2,9 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+from fpdf import FPDF
+from openpyxl import Workbook
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +20,7 @@ from glowbug.services.importer import (
     parse_amount,
     parse_date,
     parse_rows,
+    read_statement,
 )
 
 
@@ -47,6 +51,56 @@ def test_parse_amount_and_date() -> None:
     assert parse_amount("$1,234.56") == Decimal("1234.56")
     assert parse_amount("(12.34)") == Decimal("-12.34")
     assert parse_date("15/01/2026", "%d/%m/%Y") == date(2026, 1, 15)
+
+
+def test_read_xlsx_statement(tmp_path: Path) -> None:
+    path = tmp_path / "statement.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.append(["My bank statement"])
+    sheet.append([])
+    sheet.append(["Date", "Description", "Amount"])
+    sheet.append(["2026-01-15", "NETFLIX", 15.99])
+    sheet.append(["2026-01-20", "COFFEE SHOP", 4.5])
+    workbook.save(path)
+
+    headers, rows = read_statement(path)
+    assert headers[:3] == ["Date", "Description", "Amount"]
+    assert len(rows) == 2
+    assert rows[0]["Description"] == "NETFLIX"
+    assert rows[0]["Amount"] == "15.99"
+
+
+def test_read_pdf_statement(tmp_path: Path) -> None:
+    path = tmp_path / "statement.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=10)
+    with pdf.table() as table:
+        row = table.row()
+        for value in ("Date", "Description", "Amount"):
+            row.cell(value)
+        for values in (
+            ("2026-01-15", "NETFLIX", "15.99"),
+            ("2026-01-20", "COFFEE SHOP", "4.50"),
+        ):
+            row = table.row()
+            for value in values:
+                row.cell(value)
+    pdf.output(str(path))
+
+    headers, rows = read_statement(path)
+    assert headers[:3] == ["Date", "Description", "Amount"]
+    assert len(rows) == 2
+    assert rows[0]["Description"] == "NETFLIX"
+
+
+def test_read_statement_rejects_unknown_type(tmp_path: Path) -> None:
+    path = tmp_path / "statement.txt"
+    path.write_text("not a statement", encoding="utf-8")
+    with pytest.raises(ValueError, match="Unsupported file type"):
+        read_statement(path)
 
 
 async def test_import_is_idempotent_and_categorised(

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Record tax payment · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Taxes</p>
+        <h1>Record payment</h1>
+        <p class="muted">{{ profile.name }} · {{ profile.currency_code }}</p>
+    </div>
+
+    <form method="post" action="/taxes/profiles/{{ profile.id }}/payments" class="card form">
+        <label class="field">
+            <span>Amount ({{ profile.currency_code }})</span>
+            <input type="text" name="amount" inputmode="decimal" value="{{ values.amount or '' }}" required>
+        </label>
+        <label class="field">
+            <span>Paid on</span>
+            <input type="date" name="paid_on" value="{{ values.paid_on or '' }}" required>
+        </label>
+        <label class="field">
+            <span>Note <span class="muted">(optional)</span></span>
+            <input type="text" name="note" value="{{ values.note or '' }}" maxlength="255">
+        </label>
+        <div class="actions">
+            <a class="btn btn-ghost" href="/taxes?year={{ profile.tax_year }}">Cancel</a>
+            <button class="btn" type="submit">Record payment</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

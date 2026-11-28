@@ -22,6 +22,7 @@ from glowbug.services.dashboard import build_dashboard
 from glowbug.services.formatting import format_money
 from glowbug.services.fx.exceptions import RateUnavailableError
 from glowbug.services.fx.service import ExchangeRateService
+from glowbug.services.taxes import calculate_tax
 
 VALID_RANGES = {"1M", "3M", "6M", "YTD", "1Y", "ALL"}
 
@@ -89,6 +90,15 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
         "default_config": {"visualization": "number"},
         "default_size": {"w": 5, "h": 2},
     },
+    {
+        "type": "tax_summary",
+        "name": "Tax estimate",
+        "description": "Estimated tax for the year, with paid and remaining amounts.",
+        "visualizations": ["number"],
+        "default_title": "Tax estimate",
+        "default_config": {"visualization": "number"},
+        "default_size": {"w": 6, "h": 2},
+    },
 ]
 
 CATALOG_BY_TYPE = {item["type"]: item for item in WIDGET_CATALOG}
@@ -103,6 +113,7 @@ def default_widgets() -> list[dict[str, Any]]:
         {"type": "recent_transactions", "layout": {"x": 0, "y": 6, "w": 7, "h": 3}},
         {"type": "fx_rate", "layout": {"x": 7, "y": 6, "w": 5, "h": 2}},
         {"type": "category_spend", "layout": {"x": 0, "y": 9, "w": 6, "h": 3}},
+        {"type": "tax_summary", "layout": {"x": 6, "y": 9, "w": 6, "h": 2}},
     ]
 
 
@@ -415,6 +426,23 @@ async def build_widget_data(
             "datasets": [{"label": f"Spending ({primary.code})", "data": values}],
             "currency": primary.code,
             "warnings": warnings,
+        }
+
+    if widget.type == "tax_summary":
+        summary = await calculate_tax(session, user, end.year)
+        primary_code = summary.primary_currency.code if summary.primary_currency else primary.code
+        subtitle = "No tax profiles yet."
+        if summary.profiles and summary.primary_currency:
+            subtitle = (
+                f"Paid {format_money(summary.paid, primary_code, user.locale)} · "
+                f"Remaining {format_money(summary.remaining, primary_code, user.locale)}"
+            )
+        return {
+            "kind": "number",
+            "value": str(summary.estimated_tax),
+            "primary_currency": primary_code,
+            "subtitle": subtitle,
+            "warnings": summary.warnings,
         }
 
     if widget.type == "recent_transactions":
