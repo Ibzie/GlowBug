@@ -108,6 +108,16 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
     assert payload["kind"] == "number"
     assert payload["primary_currency"] == "USD"
     assert Decimal(payload["value"]) == Decimal("1000")
+    assert payload["secondary_currency"] == "EUR"
+
+    response = await client.patch(
+        f"/api/widgets/{net_worth['id']}",
+        json={"config": {"currency_mode": "primary"}},
+    )
+    assert response.status_code == 200
+    payload = (await client.get(f"/api/widgets/{net_worth['id']}/data")).json()
+    assert payload["secondary_value"] is None
+    assert payload["secondary_currency"] is None
 
     response = await client.patch(
         f"/api/dashboards/{dashboard.id}/layout",

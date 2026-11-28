@@ -336,13 +336,14 @@ async def build_widget_data(
 
     if widget.type == "net_worth":
         data = await build_dashboard(session, user)
+        show_secondary = config.get("currency_mode") == "dual" and secondary is not None
         return {
             "kind": "number",
             "value": str(data.net_primary),
             "primary_currency": primary.code,
-            "secondary_value": str(data.net_secondary) if data.net_secondary is not None else None,
-            "secondary_currency": secondary.code if secondary else None,
-            "complete": data.net_primary_complete and (not secondary or data.net_secondary_complete),
+            "secondary_value": str(data.net_secondary) if show_secondary and data.net_secondary is not None else None,
+            "secondary_currency": secondary.code if show_secondary and secondary is not None else None,
+            "complete": data.net_primary_complete and (not show_secondary or data.net_secondary_complete),
             "warnings": data.warnings,
         }
 
