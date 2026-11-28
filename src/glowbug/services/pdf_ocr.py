@@ -456,12 +456,38 @@ def _table_headers(columns: list[TableColumn]) -> list[str] | None:
     return headers
 
 
+def _horizontal_rules(image: Image.Image) -> list[int]:
+    """Detect long light-grey rules that separate transaction rows."""
+    import numpy as np
+
+    gray = np.asarray(image.convert("L"))
+    dark = gray < 220
+    minimum = int(gray.shape[1] * 0.5)
+    hits: list[int] = []
+    for y in np.flatnonzero(dark.any(axis=1)):
+        padded = np.concatenate(([False], dark[y], [False]))
+        changes = np.diff(padded.astype(np.int8))
+        starts = np.flatnonzero(changes == 1)
+        ends = np.flatnonzero(changes == -1)
+        if starts.size and int((ends - starts).max()) >= minimum:
+            hits.append(int(y))
+
+    merged: list[list[int]] = []
+    for y in hits:
+        if merged and y - merged[-1][-1] <= 2:
+            merged[-1].append(y)
+        else:
+            merged.append([y])
+    return [group[len(group) // 2] for group in merged]
+
+
 def _extract_table_page(
     image: Image.Image,
     words: list[OcrWord],
     lines: list[list[OcrWord]],
     header_index: int,
     columns: list[TableColumn],
+    rules: list[int],
 ) -> list[list[str]]:
     header_bottom = max((word.top + word.height for word in lines[header_index]), default=0)
     boundaries = _table_boundaries(columns, image.width)
@@ -486,9 +512,6 @@ def _extract_table_page(
         for word in table_words
         if column_of(word) == amount_index and any(character.isdigit() for character in word.text)
     ]
-    if not amount_words:
-        return []
-
     amount_words.sort(key=lambda word: word.top)
     tolerance = max(6, int(sum(word.height for word in amount_words) / len(amount_words) * 0.6))
     anchors: list[float] = []
@@ -501,12 +524,23 @@ def _extract_table_page(
     median_height = sorted(word.height for word in words)[len(words) // 2] or 10
     first_start = float(header_bottom)
     if header_index < 0:
-        first_start = max(0.0, anchors[0] - median_height * 2)
+        first_start = max(0.0, (anchors[0] if anchors else footer_top) - median_height * 2)
+
+    table_rules = sorted(rule for rule in rules if first_start + 8 < rule < footer_top - 8)
+    if not amount_words and len(table_rules) < 2:
+        return []
+    if len(table_rules) >= 2:
+        band_boundaries = [first_start, *table_rules, float(footer_top)]
+        bands = [(start, end) for start, end in pairwise(band_boundaries) if end - start >= median_height * 1.5]
+    else:
+        bands = []
+        for index, anchor in enumerate(anchors):
+            start = first_start if index == 0 else (anchors[index - 1] + anchor) / 2
+            end = (anchor + anchors[index + 1]) / 2 if index + 1 < len(anchors) else footer_top
+            bands.append((start, end))
 
     rows: list[list[str]] = []
-    for index, anchor in enumerate(anchors):
-        start = first_start if index == 0 else (anchors[index - 1] + anchor) / 2
-        end = (anchor + anchors[index + 1]) / 2 if index + 1 < len(anchors) else footer_top
+    for start, end in bands:
         band = [word for word in table_words if start <= (word.top + word.height / 2) < end]
 
         cells = ["" for _ in columns]
@@ -583,6 +617,7 @@ def extract_pdf_table(path: Path) -> tuple[list[str], list[list[str]]] | None:
         settings.ocr_batch_pages,
     ):
         band_words = _colour_band_words(image)
+        rules = _horizontal_rules(image)
         prepared = _remove_rules(image)
         words = _extract_words(prepared, settings.ocr_psm or DEFAULT_PSM)
         if not words:
@@ -610,7 +645,7 @@ def extract_pdf_table(path: Path) -> tuple[list[str], list[list[str]]] | None:
             if headers is None:
                 continue
 
-        rows.extend(_extract_table_page(prepared, words, lines, header_index, columns))
+        rows.extend(_extract_table_page(prepared, words, lines, header_index, columns, rules))
 
     if headers is None or not rows:
         return None
