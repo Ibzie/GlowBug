@@ -323,6 +323,9 @@ def read_statement(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def parse_amount(value: str) -> Decimal | None:
     text = value.strip().replace("\u00a0", "").replace("\u2212", "-")
+    if re.fullmatch(r"\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}", text):
+        # A date mapped into the amount column must not become "2025.00".
+        return None
     negative = text.startswith("(") and text.endswith(")")
     if negative:
         text = text[1:-1]

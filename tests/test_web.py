@@ -385,6 +385,10 @@ async def test_xlsx_upload_is_accepted(client: httpx.AsyncClient, session: Async
     assert "Map “statement.xlsx”" in response.text
     assert "Description" in response.text
     assert "NETFLIX" in response.text
+    assert '<option value="Date" selected>' in response.text
+    assert '<option value="Description" selected>' in response.text
+    assert '<option value="Amount" selected>' in response.text
+    assert '<option value="expense" selected>' in response.text
     assert f'<option value="{account.id}" selected>' in response.text
 
     page = await client.get("/transactions/import")

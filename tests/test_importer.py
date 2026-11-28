@@ -25,6 +25,7 @@ from glowbug.services.importer import (
     read_statement,
 )
 from glowbug.services.pdf_ocr import _date_from_text, _render_pages, page_ranges
+from glowbug.web.imports import default_columns, suggest_sign_convention
 
 requires_tesseract = pytest.mark.skipif(shutil.which("tesseract") is None, reason="tesseract is not installed")
 
@@ -233,6 +234,29 @@ def test_read_pdf_drops_repeated_page_headers(tmp_path: Path) -> None:
     _, rows = read_statement(path)
     assert len(rows) == 2
     assert [row["Description"] for row in rows] == ["MERCHANT 1", "MERCHANT 2"]
+
+
+def test_default_import_columns() -> None:
+    assert default_columns(["Date", "Description", "Amount", "Balance"]) == {
+        "date": "Date",
+        "description": "Description",
+        "amount": "Amount",
+        "currency": "",
+        "category": "",
+    }
+    assert default_columns(["Date", "Date", "Type", "Amount", "Category"]) == {
+        "date": "Date",
+        "description": "Type",
+        "amount": "Amount",
+        "currency": "",
+        "category": "Category",
+    }
+    assert default_columns(["Transaction Date", "Narration", "Debit", "Credit"])["date"] == "Transaction Date"
+    assert default_columns(["Transaction Date", "Narration", "Debit", "Credit"])["description"] == "Narration"
+
+    signed = [{"Amount": "-Rs. 300"}, {"Amount": "+Rs. 1,000"}]
+    assert suggest_sign_convention(signed, "Amount") == "income"
+    assert suggest_sign_convention([{"Amount": "15.99"}], "Amount") == "expense"
 
 
 def test_ocr_date_variants() -> None:

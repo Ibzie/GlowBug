@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
 from typing import Annotated
@@ -40,6 +41,88 @@ STATEMENT_ACCOUNT_TYPES = {AccountType.ASSET.value, AccountType.CASH.value}
 
 def statement_accounts(accounts: list[Account]) -> list[Account]:
     return [account for account in accounts if account.type in STATEMENT_ACCOUNT_TYPES]
+
+
+COLUMN_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "date": ("date", "time", "posted", "booking"),
+    "description": (
+        "description",
+        "details",
+        "detail",
+        "narrative",
+        "memo",
+        "particulars",
+        "payee",
+        "merchant",
+        "reference",
+    ),
+    "amount": ("amount", "value", "debit", "credit", "withdrawal", "deposit"),
+    "currency": ("currency", "ccy"),
+    "category": ("category",),
+}
+
+
+def _header_key(header: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", header.lower()).strip()
+
+
+def guess_column(
+    headers: list[str],
+    kind: str,
+    *,
+    exclude: set[str] | None = None,
+) -> str:
+    blocked = exclude or set()
+    for header in headers:
+        if header in blocked:
+            continue
+        key = _header_key(header)
+        tokens = set(key.split())
+        if any(
+            keyword in tokens or key.startswith(keyword) or key.endswith(keyword) for keyword in COLUMN_KEYWORDS[kind]
+        ):
+            return header
+    return ""
+
+
+def default_columns(headers: list[str]) -> dict[str, str]:
+    """Pick the most likely column for each field from the header names."""
+    date_column = guess_column(headers, "date")
+    description_column = guess_column(headers, "description", exclude={date_column})
+    amount_column = guess_column(headers, "amount", exclude={date_column, description_column})
+
+    if not date_column and headers:
+        date_column = headers[0]
+    if not amount_column:
+        remaining = [header for header in headers if header not in {date_column, description_column}]
+        amount_column = remaining[-1] if remaining else ""
+    if not description_column:
+        remaining = [header for header in headers if header not in {date_column, amount_column}]
+        description_column = remaining[0] if remaining else ""
+
+    used = {date_column, description_column, amount_column}
+    currency_column = guess_column(headers, "currency", exclude=used)
+    used.add(currency_column)
+    category_column = guess_column(headers, "category", exclude=used)
+
+    return {
+        "date": date_column,
+        "description": description_column,
+        "amount": amount_column,
+        "currency": currency_column,
+        "category": category_column,
+    }
+
+
+def suggest_sign_convention(
+    rows: list[dict[str, str]],
+    amount_column: str,
+) -> str:
+    """Signed statements read naturally as positive income, negative expense."""
+    values = [str(row.get(amount_column, "")).strip() for row in rows[:25] if amount_column]
+    if any(value.startswith(("+", "-", "(")) for value in values):
+        return "income"
+    return "expense"
 
 
 def import_path(token: str) -> Path | None:
@@ -176,6 +259,7 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
             status_code=400,
         )
 
+    columns = default_columns(headers)
     request.session["import_token"] = token
     request.session["import_account_id"] = str(account.id)
     return render(
@@ -190,6 +274,8 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
             "token": token,
             "filename": upload.filename or "statement.csv",
             "date_formats": DATE_FORMATS,
+            "column_defaults": columns,
+            "default_sign_convention": suggest_sign_convention(rows, columns["amount"]),
         },
     )
 

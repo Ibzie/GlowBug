@@ -5,7 +5,10 @@
     <div class="hero">
         <p class="eyebrow">Import</p>
         <h1>Map “{{ filename }}”</h1>
-        <p class="muted">Choose which column contains each field. Dates are interpreted with the selected format.</p>
+        <p class="muted">
+            Columns are preselected from the file’s headings. Check them before importing;
+            dates are interpreted with the selected format.
+        </p>
     </div>
 
     <form method="post" action="/transactions/import/preview" class="card form">
@@ -16,7 +19,7 @@
                 <span>Date column</span>
                 <select name="date_column" required>
                     {% for header in headers %}
-                        <option value="{{ header }}">{{ header }}</option>
+                        <option value="{{ header }}" {% if column_defaults.date == header %}selected{% endif %}>{{ header }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -24,7 +27,7 @@
                 <span>Description column</span>
                 <select name="description_column" required>
                     {% for header in headers %}
-                        <option value="{{ header }}">{{ header }}</option>
+                        <option value="{{ header }}" {% if column_defaults.description == header %}selected{% endif %}>{{ header }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -32,7 +35,7 @@
                 <span>Amount column</span>
                 <select name="amount_column" required>
                     {% for header in headers %}
-                        <option value="{{ header }}">{{ header }}</option>
+                        <option value="{{ header }}" {% if column_defaults.amount == header %}selected{% endif %}>{{ header }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -41,7 +44,7 @@
                 <select name="currency_column">
                     <option value="">Use account currency</option>
                     {% for header in headers %}
-                        <option value="{{ header }}">{{ header }}</option>
+                        <option value="{{ header }}" {% if column_defaults.currency == header %}selected{% endif %}>{{ header }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -50,7 +53,7 @@
                 <select name="category_column">
                     <option value="">Not provided</option>
                     {% for header in headers %}
-                        <option value="{{ header }}">{{ header }}</option>
+                        <option value="{{ header }}" {% if column_defaults.category == header %}selected{% endif %}>{{ header }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -75,8 +78,12 @@
             <label class="field">
                 <span>Amount sign</span>
                 <select name="sign_convention">
-                    <option value="expense">Positive = expense, negative = income</option>
-                    <option value="income">Positive = income, negative = expense</option>
+                    <option value="expense" {% if default_sign_convention == 'expense' %}selected{% endif %}>
+                        Positive = expense, negative = income
+                    </option>
+                    <option value="income" {% if default_sign_convention == 'income' %}selected{% endif %}>
+                        Positive = income, negative = expense
+                    </option>
                 </select>
             </label>
         </div>
