@@ -24,7 +24,7 @@ from glowbug.services.importer import (
     parse_rows,
     read_statement,
 )
-from glowbug.services.pdf_ocr import _render_pages, page_ranges
+from glowbug.services.pdf_ocr import _date_from_text, _render_pages, page_ranges
 
 requires_tesseract = pytest.mark.skipif(shutil.which("tesseract") is None, reason="tesseract is not installed")
 
@@ -55,6 +55,12 @@ async def make_user(session: AsyncSession) -> User:
 def test_parse_amount_and_date() -> None:
     assert parse_amount("$1,234.56") == Decimal("1234.56")
     assert parse_amount("(12.34)") == Decimal("-12.34")
+    assert parse_amount("-Rs. 300") == Decimal("-300")
+    assert parse_amount("-Rs. 6,073.92") == Decimal("-6073.92")
+    assert parse_amount("+Rs. 12,000") == Decimal("12000")
+    assert parse_amount("Rs. 3,160.46") == Decimal("3160.46")
+    assert parse_amount("1.234,56") == Decimal("1234.56")
+    assert parse_amount("(Rs. 12.34)") == Decimal("-12.34")
     assert parse_date("15/01/2026", "%d/%m/%Y") == date(2026, 1, 15)
 
 
@@ -139,6 +145,55 @@ def test_read_scanned_pdf_without_text_layer(tmp_path: Path) -> None:
 
 
 @requires_tesseract
+def test_read_pdf_table_with_wrapped_rows(tmp_path: Path) -> None:
+    path = tmp_path / "wrapped.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=False)
+
+    pdf.set_fill_color(240, 90, 40)
+    pdf.rect(10, 10, 190, 10, style="F")
+    pdf.set_font("Helvetica", style="B", size=9)
+    pdf.set_text_color(255, 255, 255)
+    for x, label in ((12, "TIME"), (40, "TYPE"), (70, "DESCRIPTION"), (150, "AMOUNT"), (180, "BALANCE")):
+        pdf.set_xy(x, 12)
+        pdf.cell(25, 6, label)
+    pdf.set_text_color(0, 0, 0)
+
+    rows = (
+        ("15 Jan 2026", "03:31 PM", "Online", "Paid to NETFLIX.COM Subscription", "-Rs. 1,200", "Rs. 8,800"),
+        ("16 Jan 2026", "09:05 AM", "Peer", "Money received from Baroosh Ahsan", "+Rs. 5,000", "Rs. 13,800"),
+    )
+    top = 26
+    pdf.set_font("Helvetica", size=9)
+    for journal_date, clock, kind, description, amount, balance in rows:
+        pdf.set_xy(12, top)
+        pdf.cell(25, 5, journal_date)
+        pdf.set_xy(12, top + 5)
+        pdf.cell(25, 5, clock)
+        pdf.set_xy(40, top)
+        pdf.cell(25, 5, kind)
+        pdf.set_xy(70, top)
+        pdf.multi_cell(75, 5, description)
+        pdf.set_xy(150, top)
+        pdf.cell(25, 5, amount)
+        pdf.set_xy(180, top)
+        pdf.cell(25, 5, balance)
+        top += 30
+    pdf.output(str(path))
+
+    headers, parsed = read_statement(path)
+    assert headers == ["Date", "Description", "Amount", "Balance"]
+    assert len(parsed) == 2
+    assert parsed[0]["Date"] == "2026-01-15"
+    assert parsed[0]["Description"].startswith("Online")
+    assert "NETFLIX" in parsed[0]["Description"]
+    assert parsed[0]["Amount"] == "-Rs. 1,200"
+    assert parsed[1]["Date"] == "2026-01-16"
+    assert parsed[1]["Amount"] == "+Rs. 5,000"
+
+
+@requires_tesseract
 def test_read_pdf_repairs_merged_header_cells(tmp_path: Path) -> None:
     path = tmp_path / "paragraph.pdf"
     pdf = FPDF()
@@ -178,6 +233,14 @@ def test_read_pdf_drops_repeated_page_headers(tmp_path: Path) -> None:
     _, rows = read_statement(path)
     assert len(rows) == 2
     assert [row["Description"] for row in rows] == ["MERCHANT 1", "MERCHANT 2"]
+
+
+def test_ocr_date_variants() -> None:
+    assert _date_from_text("O1Jul 2025 03:31PM") == "2025-07-01"
+    assert _date_from_text("Jul 01 2025 08:35 PM") == "2025-07-01"
+    assert _date_from_text("2025-07-01 03:31") == "2025-07-01"
+    assert _date_from_text("01/07/2025") == "2025-07-01"
+    assert _date_from_text("no date here") is None
 
 
 def test_page_ranges_split_into_batches() -> None:

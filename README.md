@@ -106,6 +106,9 @@ npm run build
   are removed, and Tesseract reads the text. Scanned, photographed, and
   image-only PDFs therefore work without a text layer. Digital PDFs go through
   the same path.
+- When a statement has a transaction-table heading, OCR uses those headings to
+  anchor the columns, including coloured header bands, and groups wrapped
+  multi-line transactions by their amount position.
 - OCR is language-aware via `OCR_LANGUAGE` (default `eng`). Install the matching
   Tesseract language pack (for example `tesseract-ocr-deu`) in the image to
   read other languages.

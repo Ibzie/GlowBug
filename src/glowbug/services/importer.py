@@ -21,7 +21,7 @@ from glowbug.models.user import User
 from glowbug.services.categories import get_category_by_name
 from glowbug.services.categorizer import MerchantPrediction, normalize_merchant, predict_category
 from glowbug.services.ledger import Split, post_journal
-from glowbug.services.pdf_ocr import extract_pdf_rows
+from glowbug.services.pdf_ocr import extract_pdf_rows, extract_pdf_table
 from glowbug.services.transactions import ensure_system_account
 
 DATE_FORMATS = [
@@ -274,9 +274,31 @@ def _extract_pdf_rows_cached(
     return tuple(tuple(row) for row in extract_pdf_rows(Path(path_text)))
 
 
+@lru_cache(maxsize=8)
+def _extract_pdf_table_cached(
+    path_text: str,
+    mtime_ns: int,
+    size: int,
+) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...]] | None:
+    result = extract_pdf_table(Path(path_text))
+    if result is None:
+        return None
+    headers, rows = result
+    return tuple(headers), tuple(tuple(row) for row in rows)
+
+
 def read_pdf(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     stat = path.stat()
-    cached = _extract_pdf_rows_cached(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+    resolved = str(path.resolve())
+    table = _extract_pdf_table_cached(resolved, stat.st_mtime_ns, stat.st_size)
+    if table is not None:
+        headers = list(table[0])
+        return headers, [
+            {header: (row[index] if index < len(row) else "") for index, header in enumerate(headers)}
+            for row in table[1]
+        ]
+
+    cached = _extract_pdf_rows_cached(resolved, stat.st_mtime_ns, stat.st_size)
     rows = [list(row) for row in cached]
     if not rows:
         raise ValueError(
@@ -299,22 +321,49 @@ def read_statement(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 
 def parse_amount(value: str) -> Decimal | None:
-    text = value.strip().replace("\u00a0", "")
+    text = value.strip().replace("\u00a0", "").replace("\u2212", "-")
     negative = text.startswith("(") and text.endswith(")")
     if negative:
         text = text[1:-1]
 
-    cleaned = "".join(character for character in text if character.isdigit() or character in ".,-+")
-    if not cleaned:
+    match = re.search(r"\d[\d\s.,']*", text)
+    if match is None:
         return None
-    cleaned = cleaned.replace(",", "")
+
+    prefix = text[: match.start()]
+    suffix = text[match.end() :]
+    if "-" in prefix or "-" in suffix:
+        negative = True
+
+    number = match.group(0).replace(" ", "").replace("'", "").rstrip(".,")
+    if not number:
+        return None
+
+    if "," in number and "." in number:
+        if number.rfind(",") > number.rfind("."):
+            number = number.replace(".", "").replace(",", ".")
+        else:
+            number = number.replace(",", "")
+    elif "," in number:
+        parts = number.split(",")
+        if len(parts) > 1 and all(len(part) == 3 for part in parts[1:]):
+            number = "".join(parts)
+        else:
+            number = number.replace(",", ".")
+
+    if number.count(".") > 1:
+        head, _, tail = number.rpartition(".")
+        if len(tail) == 2 and head.replace(".", "").isdigit():
+            number = f"{head.replace('.', '')}.{tail}"
+        else:
+            number = number.replace(".", "")
+
     try:
-        amount = Decimal(cleaned)
+        amount = Decimal(number)
     except InvalidOperation:
         return None
-    if negative:
-        amount = -amount
-    return amount
+
+    return -amount if negative else amount
 
 
 def _normalise_date_text(value: str) -> str:
