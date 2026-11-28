@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -413,6 +414,7 @@ def row_fingerprint(
 def parse_rows(path: Path, mapping: ImportMapping, account: Account) -> ImportParseResult:
     _, raw_rows = read_statement(path)
     result = ImportParseResult()
+    occurrences: defaultdict[str, int] = defaultdict(int)
 
     for index, raw in enumerate(raw_rows, start=2):
         date_value = raw.get(mapping.date_column, "")
@@ -453,6 +455,21 @@ def parse_rows(path: Path, mapping: ImportMapping, account: Account) -> ImportPa
             )
             continue
 
+        fingerprint = row_fingerprint(
+            journal_date,
+            description,
+            magnitude,
+            transaction_type,
+            currency_code,
+            account.id,
+        )
+        # Two genuinely separate transactions can share date, merchant, and
+        # amount. Keep the first fingerprint stable for existing imports, and
+        # give later occurrences a deterministic suffix so they are not lost.
+        occurrences[fingerprint] += 1
+        if occurrences[fingerprint] > 1:
+            fingerprint = hashlib.sha256(f"{fingerprint}:{occurrences[fingerprint]}".encode()).hexdigest()
+
         result.rows.append(
             ParsedRow(
                 journal_date=journal_date,
@@ -461,14 +478,7 @@ def parse_rows(path: Path, mapping: ImportMapping, account: Account) -> ImportPa
                 transaction_type=transaction_type,
                 currency_code=currency_code,
                 category_name=category_name,
-                fingerprint=row_fingerprint(
-                    journal_date,
-                    description,
-                    magnitude,
-                    transaction_type,
-                    currency_code,
-                    account.id,
-                ),
+                fingerprint=fingerprint,
             )
         )
 

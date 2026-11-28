@@ -327,7 +327,7 @@ async def test_import_is_idempotent_and_categorised(
     assert count == 3
 
 
-async def test_duplicate_rows_within_file_are_skipped(
+async def test_identical_rows_are_kept_and_reimport_is_idempotent(
     session: AsyncSession,
     tmp_path: Path,
 ) -> None:
@@ -354,5 +354,9 @@ async def test_duplicate_rows_within_file_are_skipped(
     assert len(parsed.rows) == 2
 
     summary = await import_rows(session, user, parsed.rows, bank)
-    assert summary.imported == 1
-    assert summary.skipped == 1
+    assert summary.imported == 2
+    assert summary.skipped == 0
+
+    repeat = await import_rows(session, user, parsed.rows, bank)
+    assert repeat.imported == 0
+    assert repeat.skipped == 2
