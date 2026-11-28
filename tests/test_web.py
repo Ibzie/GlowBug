@@ -1,9 +1,11 @@
 import re
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 from urllib.parse import urlencode
 
 import httpx
+from openpyxl import Workbook
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -349,6 +351,33 @@ async def test_csv_import_is_idempotent_and_detects_subscription(
 
     journals = list(await session.scalars(select(TransactionJournal).where(TransactionJournal.user_id == user.id)))
     assert len(journals) == 4
+
+
+async def test_xlsx_upload_is_accepted(client: httpx.AsyncClient) -> None:
+    await complete_setup(client)
+
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.append(["Date", "Description", "Amount"])
+    sheet.append(["2026-01-15", "NETFLIX", 15.99])
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    response = await client.post(
+        "/transactions/import/upload",
+        files={
+            "file": (
+                "statement.xlsx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 200
+    assert "Map “statement.xlsx”" in response.text
+    assert "Description" in response.text
+    assert "NETFLIX" in response.text
 
 
 async def test_categories_seeded_and_custom_category(client: httpx.AsyncClient) -> None:
