@@ -474,3 +474,44 @@ async def test_uncategorized_spend_uses_neutral_colour(session: AsyncSession) ->
 
     assert data["labels"] == ["Uncategorized"]
     assert data["colors"] == ["#94a3b8"]
+
+
+async def test_secondary_series_uses_latest_rate_for_old_dates(session: AsyncSession) -> None:
+    user = await make_user(session)
+    bank = await create_account(
+        session,
+        user,
+        account_type=AccountType.ASSET,
+        name="Bank",
+        currency_code="USD",
+    )
+    today = date.today()
+    session.add(
+        ExchangeRate(
+            base_code="USD",
+            quote_code="EUR",
+            as_of_date=today,
+            rate=Decimal("0.9"),
+            source="test",
+        )
+    )
+    await session.commit()
+
+    await create_transaction(
+        session,
+        user,
+        transaction_type="deposit",
+        journal_date=today - timedelta(days=60),
+        description="Old salary",
+        amount=Decimal("500"),
+        currency_code="USD",
+        account_id=bank.id,
+    )
+
+    dashboard = await get_or_create_default_dashboard(session, user)
+    widget = next(widget for widget in dashboard.widgets if widget.type == "income_expense")
+    data = await build_widget_data(session, user, widget, today - timedelta(days=90), today)
+
+    secondary_income = next(dataset for dataset in data["datasets"] if dataset["label"] == "Income (EUR)")
+    assert sum(secondary_income["data"]) == 450.0
+    assert any("Using the latest USD/EUR rate" in warning for warning in data["warnings"])

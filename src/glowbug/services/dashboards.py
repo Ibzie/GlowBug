@@ -696,8 +696,17 @@ async def income_expense_series(
                 rate, _ = await converter.get_rate(currency, primary_code, on_date)
                 cache[key] = rate
             except RateUnavailableError:
-                cache[key] = None
-                warnings.add(f"No {currency}/{primary_code} rate for {on_date.isoformat()}.")
+                # PKR and similar currencies have no long history in the rate
+                # source. Use the latest rate so the secondary series still
+                # shows the shape of the period instead of a row of zeros.
+                try:
+                    rate, _ = await converter.get_rate(currency, primary_code, end)
+                except RateUnavailableError:
+                    cache[key] = None
+                    warnings.add(f"No {currency}/{primary_code} rate for {on_date.isoformat()}.")
+                else:
+                    cache[key] = rate
+                    warnings.add(f"Using the latest {currency}/{primary_code} rate for dates without historical rates.")
         rate = cache[key]
         return None if rate is None else amount * rate
 
