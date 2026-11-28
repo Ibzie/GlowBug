@@ -58,7 +58,8 @@ services:
       OCR_SCALE: ${OCR_SCALE:-4}
       OCR_MIN_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-20}
       OCR_PSM: ${OCR_PSM:-6}
-      OCR_MAX_PAGES: ${OCR_MAX_PAGES:-25}
+      OCR_BATCH_PAGES: ${OCR_BATCH_PAGES:-25}
+      OCR_PAGE_LIMIT: ${OCR_PAGE_LIMIT:-200}
     ports:
       - "8000:8000"
     healthcheck:
@@ -84,6 +85,7 @@ services:
         "glowbug.jobs.broker:broker",
         "glowbug.jobs.tasks",
         "glowbug.jobs.fx",
+        "glowbug.jobs.recurring",
       ]
     environment:
       APP_ENV: development
@@ -110,6 +112,7 @@ services:
         "glowbug.jobs.scheduler:scheduler",
         "glowbug.jobs.tasks",
         "glowbug.jobs.fx",
+        "glowbug.jobs.recurring",
       ]
     environment:
       APP_ENV: development

@@ -24,6 +24,7 @@ from glowbug.services.importer import (
     parse_rows,
     read_statement,
 )
+from glowbug.services.pdf_ocr import _render_pages, page_ranges
 
 requires_tesseract = pytest.mark.skipif(shutil.which("tesseract") is None, reason="tesseract is not installed")
 
@@ -177,6 +178,28 @@ def test_read_pdf_drops_repeated_page_headers(tmp_path: Path) -> None:
     _, rows = read_statement(path)
     assert len(rows) == 2
     assert [row["Description"] for row in rows] == ["MERCHANT 1", "MERCHANT 2"]
+
+
+def test_page_ranges_split_into_batches() -> None:
+    assert page_ranges(0, 25) == []
+    assert page_ranges(60, 25) == [(0, 25), (25, 50), (50, 60)]
+    assert page_ranges(3, 25) == [(0, 3)]
+
+
+def test_pdf_pages_are_rendered_in_batches(tmp_path: Path) -> None:
+    path = tmp_path / "many.pdf"
+    pdf = FPDF()
+    for _ in range(3):
+        pdf.add_page()
+    pdf.output(str(path))
+
+    images = list(_render_pages(path, 1, page_limit=3, batch_pages=2))
+    assert len(images) == 3
+    for image in images:
+        image.close()
+
+    with pytest.raises(ValueError, match="limit is 2"):
+        list(_render_pages(path, 1, page_limit=2, batch_pages=2))
 
 
 def test_read_statement_rejects_unknown_type(tmp_path: Path) -> None:

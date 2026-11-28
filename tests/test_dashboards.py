@@ -99,6 +99,7 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
         "account_balances",
         "income_expense",
         "category_spend",
+        "balance_sections",
         "tax_summary",
         "fx_rate",
     } <= types
@@ -106,7 +107,7 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
     response = await client.get(f"/api/dashboards/{dashboard.id}")
     assert response.status_code == 200
     body = response.json()
-    assert len(body["widgets"]) == 8
+    assert len(body["widgets"]) == 9
 
     net_worth = next(widget for widget in body["widgets"] if widget["type"] == "net_worth")
     response = await client.get(f"/api/widgets/{net_worth['id']}/data")
@@ -116,6 +117,16 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
     assert payload["primary_currency"] == "USD"
     assert Decimal(payload["value"]) == Decimal("1000")
     assert payload["secondary_currency"] == "EUR"
+
+    sections_widget = next(widget for widget in body["widgets"] if widget["type"] == "balance_sections")
+    response = await client.get(f"/api/widgets/{sections_widget['id']}/data")
+    assert response.status_code == 200
+    sections_payload = response.json()
+    assert sections_payload["kind"] == "chart"
+    assert sections_payload["chart"] == "doughnut"
+    assert sections_payload["labels"] == ["Unallocated"]
+    assert sections_payload["datasets"][0]["data"] == [1000.0]
+    assert sections_payload["colors"] == ["#94a3b8"]
 
     tax_widget = next(widget for widget in body["widgets"] if widget["type"] == "tax_summary")
     response = await client.get(f"/api/widgets/{tax_widget['id']}/data")
@@ -177,7 +188,7 @@ async def test_default_dashboard_is_idempotent(session: AsyncSession) -> None:
     second = await get_or_create_default_dashboard(session, user)
 
     assert first.id == second.id
-    assert len(second.widgets) == 8
+    assert len(second.widgets) == 9
 
 
 async def test_income_expense_widget_data(session: AsyncSession) -> None:

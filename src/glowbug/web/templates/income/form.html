@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{% if schedule %}Edit income schedule{% else %}New income schedule{% endif %} · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Income</p>
+        <h1>{% if schedule %}Edit “{{ schedule.name }}”{% else %}New income schedule{% endif %}</h1>
+        <p class="muted">
+            A recurring deposit is posted to the account on the chosen day each month, in the account’s currency.
+        </p>
+    </div>
+
+    <form method="post" action="{% if schedule %}/income/{{ schedule.id }}{% else %}/income{% endif %}" class="card form">
+        <label class="field">
+            <span>Name</span>
+            <input type="text" name="name" value="{{ values.name or '' }}" maxlength="120" required autofocus>
+        </label>
+
+        <div class="form-grid">
+            <label class="field">
+                <span>Amount</span>
+                <input type="text" name="amount" inputmode="decimal" value="{{ values.amount or '' }}" required>
+            </label>
+            <label class="field">
+                <span>Account</span>
+                <select name="account_id" required>
+                    <option value="">Choose an account</option>
+                    {% for account in accounts %}
+                        <option value="{{ account.id }}" {% if values.account_id == account.id|string %}selected{% endif %}>
+                            {{ account.name }} ({{ account.currency_code }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Pay day</span>
+                <input type="number" name="day_of_month" min="1" max="31"
+                       value="{{ values.day_of_month or '1' }}" required>
+            </label>
+            <label class="field">
+                <span>Category <span class="muted">(optional)</span></span>
+                <select name="category_id">
+                    <option value="">Uncategorized</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if values.category_id == category.id|string %}selected{% endif %}>
+                            {{ category.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Start date</span>
+                <input type="date" name="start_date" value="{{ values.start_date or today }}" required>
+            </label>
+            <label class="field">
+                <span>End date <span class="muted">(optional)</span></span>
+                <input type="date" name="end_date" value="{{ values.end_date or '' }}">
+            </label>
+        </div>
+
+        <label class="field">
+            <span>Notes <span class="muted">(optional)</span></span>
+            <textarea name="notes" rows="3">{{ values.notes or '' }}</textarea>
+        </label>
+
+        <label class="checkbox-field">
+            <input type="checkbox" name="active" value="1" {% if values.active %}checked{% endif %}>
+            <span>Active — post this income automatically</span>
+        </label>
+
+        <div class="actions">
+            <a class="btn btn-ghost" href="/income">Cancel</a>
+            <button class="btn" type="submit">{% if schedule %}Save schedule{% else %}Create schedule{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

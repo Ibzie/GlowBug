@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{% if goal %}Edit savings goal{% else %}New savings goal{% endif %} · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Savings</p>
+        <h1>{% if goal %}Edit “{{ goal.name }}”{% else %}New savings goal{% endif %}</h1>
+        <p class="muted">
+            The monthly contribution is earmarked on the day you choose. It counts toward the goal
+            without moving money out of your accounts.
+        </p>
+    </div>
+
+    <form method="post" action="{% if goal %}/savings/{{ goal.id }}{% else %}/savings{% endif %}" class="card form">
+        <label class="field">
+            <span>Name</span>
+            <input type="text" name="name" value="{{ values.name or '' }}" maxlength="120" required autofocus>
+        </label>
+
+        <div class="form-grid">
+            <label class="field">
+                <span>Target amount</span>
+                <input type="text" name="target_amount" inputmode="decimal" value="{{ values.target_amount or '' }}" required>
+            </label>
+            <label class="field">
+                <span>Currency</span>
+                <select name="currency_code">
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if values.currency_code == currency.code %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Monthly contribution</span>
+                <input type="text" name="monthly_contribution" inputmode="decimal"
+                       value="{{ values.monthly_contribution or '0' }}">
+            </label>
+            <label class="field">
+                <span>Contribution day</span>
+                <input type="number" name="contribution_day" min="1" max="31"
+                       value="{{ values.contribution_day or '1' }}" required>
+            </label>
+            <label class="field">
+                <span>Start date</span>
+                <input type="date" name="start_date" value="{{ values.start_date or today }}" required>
+            </label>
+            <label class="field">
+                <span>Target date <span class="muted">(optional)</span></span>
+                <input type="date" name="target_date" value="{{ values.target_date or '' }}">
+            </label>
+            <label class="field">
+                <span>Colour</span>
+                <input type="color" name="color" value="{{ values.color or default_color }}">
+            </label>
+        </div>
+
+        <label class="field">
+            <span>Notes <span class="muted">(optional)</span></span>
+            <textarea name="notes" rows="3">{{ values.notes or '' }}</textarea>
+        </label>
+
+        <label class="checkbox-field">
+            <input type="checkbox" name="active" value="1" {% if values.active %}checked{% endif %}>
+            <span>Active — apply the monthly contribution</span>
+        </label>
+
+        <div class="actions">
+            <a class="btn btn-ghost" href="/savings">Cancel</a>
+            <button class="btn" type="submit">{% if goal %}Save goal{% else %}Create goal{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

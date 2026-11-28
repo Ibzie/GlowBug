@@ -4,6 +4,7 @@ from glowbug.models.category import Category, MerchantMemory
 from glowbug.models.currency import Currency
 from glowbug.models.dashboard import Dashboard, DashboardWidget
 from glowbug.models.exchange_rate import ExchangeRate
+from glowbug.models.savings import IncomeSchedule, SavingsContribution, SavingsGoal
 from glowbug.models.subscription import Subscription
 from glowbug.models.tax import TaxPayment, TaxProfile, TaxProfileCategory
 from glowbug.models.transaction import Transaction, TransactionJournal
@@ -18,7 +19,10 @@ __all__ = [
     "Dashboard",
     "DashboardWidget",
     "ExchangeRate",
+    "IncomeSchedule",
     "MerchantMemory",
+    "SavingsContribution",
+    "SavingsGoal",
     "Subscription",
     "TaxPayment",
     "TaxProfile",

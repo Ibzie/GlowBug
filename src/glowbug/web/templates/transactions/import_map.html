@@ -58,7 +58,9 @@
                 <span>Account</span>
                 <select name="account_id" required>
                     {% for account in accounts %}
-                        <option value="{{ account.id }}">{{ account.name }} ({{ account.currency_code }})</option>
+                        <option value="{{ account.id }}" {% if selected_account_id == account.id|string %}selected{% endif %}>
+                            {{ account.name }} ({{ account.currency_code }})
+                        </option>
                     {% endfor %}
                 </select>
             </label>

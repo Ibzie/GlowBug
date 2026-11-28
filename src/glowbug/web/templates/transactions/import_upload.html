@@ -15,20 +15,42 @@
         </p>
     </div>
 
-    <form method="post" action="/transactions/import/upload" enctype="multipart/form-data" class="card form">
-        <label class="field">
-            <span>Statement file</span>
-            <input type="file" name="file"
-                   accept=".csv,.xlsx,.xlsm,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
-                   required>
-        </label>
-        <p class="muted small">
-            Typical columns: date, description, amount. A currency or category column is optional.
-        </p>
-        <div class="actions">
-            <a class="btn btn-ghost" href="/transactions">Cancel</a>
-            <button class="btn" type="submit">Continue</button>
+    {% if accounts %}
+        <form method="post" action="/transactions/import/upload" enctype="multipart/form-data" class="card form">
+            <label class="field">
+                <span>Account</span>
+                <select name="account_id" required>
+                    {% for account in accounts %}
+                        <option value="{{ account.id }}" {% if selected_account_id == account.id|string %}selected{% endif %}>
+                            {{ account.name }} ({{ account.currency_code }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <p class="muted small">
+                The statement is tied to this account. You can still change it on the next step.
+            </p>
+
+            <label class="field">
+                <span>Statement file</span>
+                <input type="file" name="file"
+                       accept=".csv,.xlsx,.xlsm,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
+                       required>
+            </label>
+            <p class="muted small">
+                Typical columns: date, description, amount. A currency or category column is optional.
+                PDFs can be up to {{ ocr_page_limit }} pages; OCR runs in batches of {{ ocr_batch_pages }}.
+            </p>
+            <div class="actions">
+                <a class="btn btn-ghost" href="/transactions">Cancel</a>
+                <button class="btn" type="submit">Upload statement</button>
+            </div>
+        </form>
+    {% else %}
+        <div class="card empty">
+            <p>Add an active bank, cash, or savings account before importing a statement.</p>
+            <a class="btn" href="/accounts/new">Add an account</a>
         </div>
-    </form>
+    {% endif %}
 </div>
 {% endblock %}

@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from glowbug.db.session import get_session
+from glowbug.enums import AccountType
 from glowbug.models.account import Account
 from glowbug.security import get_session_user
 from glowbug.services.accounts import list_accounts
@@ -34,6 +35,11 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 IMPORT_DIR = Path("storage/imports")
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xlsm", ".pdf"}
+STATEMENT_ACCOUNT_TYPES = {AccountType.ASSET.value, AccountType.CASH.value}
+
+
+def statement_accounts(accounts: list[Account]) -> list[Account]:
+    return [account for account in accounts if account.type in STATEMENT_ACCOUNT_TYPES]
 
 
 def import_path(token: str) -> Path | None:
@@ -70,11 +76,14 @@ async def import_upload_page(request: Request, session: SessionDep) -> HTMLRespo
     if user is None:
         return RedirectResponse("/login", status_code=303)
 
-    accounts = await list_accounts(session, user.id)
+    accounts = statement_accounts(await list_accounts(session, user.id))
+    selected = str(request.session.get("import_account_id", ""))
+    if selected not in {str(account.id) for account in accounts}:
+        selected = str(accounts[0].id) if len(accounts) == 1 else ""
     return render(
         request,
         "transactions/import_upload.html",
-        {"user": user, "accounts": accounts},
+        {"user": user, "accounts": accounts, "selected_account_id": selected},
     )
 
 
@@ -86,12 +95,35 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
 
     form = await request.form()
     upload = form.get("file")
-    accounts = await list_accounts(session, user.id)
+    accounts = statement_accounts(await list_accounts(session, user.id))
+    selected_account_id = str(form.get("account_id", ""))
+    account = next((item for item in accounts if str(item.id) == selected_account_id), None)
+    if account is None:
+        return render(
+            request,
+            "transactions/import_upload.html",
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": selected_account_id,
+                "error": (
+                    "Add an account before importing a statement."
+                    if not accounts
+                    else "Choose the account this statement belongs to."
+                ),
+            },
+            status_code=400,
+        )
     if not isinstance(upload, UploadFile):
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": "Choose a CSV, XLSX, or PDF statement."},
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": str(account.id),
+                "error": "Choose a CSV, XLSX, or PDF statement.",
+            },
             status_code=400,
         )
 
@@ -100,7 +132,12 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": "The uploaded file is empty."},
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": str(account.id),
+                "error": "The uploaded file is empty.",
+            },
             status_code=400,
         )
 
@@ -112,6 +149,7 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
             {
                 "user": user,
                 "accounts": accounts,
+                "selected_account_id": str(account.id),
                 "error": "Upload a CSV, XLSX, or PDF statement.",
             },
             status_code=400,
@@ -129,17 +167,24 @@ async def import_upload_submit(request: Request, session: SessionDep) -> HTMLRes
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": str(exc)},
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": selected_account_id,
+                "error": str(exc),
+            },
             status_code=400,
         )
 
     request.session["import_token"] = token
+    request.session["import_account_id"] = str(account.id)
     return render(
         request,
         "transactions/import_map.html",
         {
             "user": user,
             "accounts": accounts,
+            "selected_account_id": str(account.id),
             "headers": headers,
             "sample_rows": rows[:5],
             "token": token,
@@ -158,7 +203,8 @@ async def import_preview(request: Request, session: SessionDep) -> HTMLResponse 
     form = await request.form()
     token = str(form.get("token", "")) or str(request.session.get("import_token", ""))
     path = import_path(token)
-    accounts = await list_accounts(session, user.id)
+    accounts = statement_accounts(await list_accounts(session, user.id))
+    selected_account_id = str(request.session.get("import_account_id", ""))
 
     try:
         mapping = mapping_from_form(form)
@@ -166,7 +212,12 @@ async def import_preview(request: Request, session: SessionDep) -> HTMLResponse 
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": str(exc)},
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": selected_account_id,
+                "error": str(exc),
+            },
             status_code=400,
         )
 
@@ -175,14 +226,24 @@ async def import_preview(request: Request, session: SessionDep) -> HTMLResponse 
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": "Choose a valid account."},
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": selected_account_id,
+                "error": "Choose a valid account.",
+            },
             status_code=400,
         )
     if path is None or not path.exists():
         return render(
             request,
             "transactions/import_upload.html",
-            {"user": user, "accounts": accounts, "error": "The upload expired. Please upload the file again."},
+            {
+                "user": user,
+                "accounts": accounts,
+                "selected_account_id": selected_account_id,
+                "error": "The upload expired. Please upload the file again.",
+            },
             status_code=400,
         )
 
@@ -244,6 +305,7 @@ async def import_confirm(request: Request, session: SessionDep) -> HTMLResponse 
     summary = await import_rows(session, user, parsed.rows, account)
     path.unlink(missing_ok=True)
     request.session.pop("import_token", None)
+    request.session.pop("import_account_id", None)
 
     categories = {category.id: category for category in await ensure_categories(session, user)}
     account_map = {acc.id: acc for acc in await list_accounts(session, user.id)}

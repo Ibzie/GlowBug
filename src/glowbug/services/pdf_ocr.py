@@ -16,6 +16,7 @@ The pipeline:
 from __future__ import annotations
 
 import bisect
+import logging
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 from glowbug.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 DATE_TOKEN = re.compile(r"^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$")
 COMPACT_DATE_TOKEN = re.compile(r"^\d{8}$")
@@ -50,7 +53,18 @@ class OcrWord:
         return self.left + self.width / 2
 
 
-def _render_pages(path: Path, scale: int, max_pages: int) -> Iterator[Image.Image]:
+def page_ranges(page_count: int, batch_pages: int) -> list[tuple[int, int]]:
+    """Split a document into half-open page ranges for batched OCR."""
+    size = max(1, batch_pages)
+    return [(start, min(start + size, page_count)) for start in range(0, page_count, size)]
+
+
+def _render_pages(
+    path: Path,
+    scale: int,
+    page_limit: int,
+    batch_pages: int,
+) -> Iterator[Image.Image]:
     import pypdfium2 as pdfium
 
     try:
@@ -60,21 +74,23 @@ def _render_pages(path: Path, scale: int, max_pages: int) -> Iterator[Image.Imag
 
     try:
         page_count = len(document)
-        if max_pages and page_count > max_pages:
+        if page_limit and page_count > page_limit:
             raise ValueError(
-                f"This PDF has {page_count} pages; the OCR limit is {max_pages}. "
+                f"This PDF has {page_count} pages; the limit is {page_limit}. "
                 "Split the statement into smaller files and import them separately."
             )
-        for index in range(page_count):
-            page = document[index]
-            try:
-                bitmap = page.render(scale=scale)
+        for start, end in page_ranges(page_count, batch_pages):
+            logger.info("OCR reading pages %d-%d of %d", start + 1, end, page_count)
+            for index in range(start, end):
+                page = document[index]
                 try:
-                    yield bitmap.to_pil()
+                    bitmap = page.render(scale=scale)
+                    try:
+                        yield bitmap.to_pil()
+                    finally:
+                        bitmap.close()
                 finally:
-                    bitmap.close()
-            finally:
-                page.close()
+                    page.close()
     finally:
         document.close()
 
@@ -272,7 +288,12 @@ def extract_pdf_rows(path: Path) -> list[list[str]]:
     settings = get_settings()
     rows: list[list[str]] = []
     try:
-        for image in _render_pages(path, settings.ocr_scale, settings.ocr_max_pages):
+        for image in _render_pages(
+            path,
+            settings.ocr_scale,
+            settings.ocr_page_limit,
+            settings.ocr_batch_pages,
+        ):
             prepared = _remove_rules(image)
             words = _extract_words(prepared, settings.ocr_psm or DEFAULT_PSM)
             if not words:

@@ -22,6 +22,7 @@ from glowbug.services.dashboard import build_dashboard
 from glowbug.services.formatting import format_money
 from glowbug.services.fx.exceptions import RateUnavailableError
 from glowbug.services.fx.service import ExchangeRateService
+from glowbug.services.savings import balance_sections
 from glowbug.services.taxes import calculate_tax
 
 VALID_RANGES = {"1M", "3M", "6M", "YTD", "1Y", "ALL"}
@@ -35,6 +36,15 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
         "default_title": "Net worth",
         "default_config": {"visualization": "number", "currency_mode": "dual"},
         "default_size": {"w": 4, "h": 2},
+    },
+    {
+        "type": "balance_sections",
+        "name": "Balance by section",
+        "description": "Your net worth split into unallocated money and each savings goal.",
+        "visualizations": ["doughnut", "bar"],
+        "default_title": "Balance by section",
+        "default_config": {"visualization": "doughnut", "currency_mode": "primary"},
+        "default_size": {"w": 6, "h": 3},
     },
     {
         "type": "account_balances",
@@ -114,6 +124,7 @@ def default_widgets() -> list[dict[str, Any]]:
         {"type": "fx_rate", "layout": {"x": 7, "y": 6, "w": 5, "h": 2}},
         {"type": "category_spend", "layout": {"x": 0, "y": 9, "w": 6, "h": 3}},
         {"type": "tax_summary", "layout": {"x": 6, "y": 9, "w": 6, "h": 2}},
+        {"type": "balance_sections", "layout": {"x": 0, "y": 12, "w": 6, "h": 3}},
     ]
 
 
@@ -412,6 +423,36 @@ async def build_widget_data(
             "datasets": [{"label": "Net cash flow", "data": [float(value) for value in net]}],
             "currency": primary.code,
             "warnings": warnings,
+        }
+
+    if widget.type == "balance_sections":
+        sections = await balance_sections(session, user, end)
+        if not sections.currency_code:
+            return {"kind": "error", "message": "No primary currency is configured."}
+        chart = config.get("visualization")
+        if chart not in {"doughnut", "bar"}:
+            chart = "doughnut"
+        return {
+            "kind": "chart",
+            "chart": chart,
+            "labels": [section.label for section in sections.sections],
+            "datasets": [
+                {
+                    "label": f"Balance ({sections.currency_code})",
+                    "data": [float(section.amount) for section in sections.sections],
+                }
+            ],
+            "colors": [section.color for section in sections.sections],
+            "currency": sections.currency_code,
+            "subtitle": (
+                f"Total {format_money(sections.total, sections.currency_code, user.locale)} · "
+                f"Saved {format_money(sections.saved, sections.currency_code, user.locale)}"
+            ),
+            "total": str(sections.total),
+            "saved": str(sections.saved),
+            "available": str(sections.available),
+            "complete": sections.complete,
+            "warnings": sections.warnings,
         }
 
     if widget.type == "category_spend":

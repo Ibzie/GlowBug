@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Savings · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Savings</p>
+            <h1>Savings goals</h1>
+            <p class="muted">
+                Goals earmark part of your balance. They count inside your total net worth while keeping
+                unallocated money clearly separate.
+            </p>
+        </div>
+        <div class="actions">
+            <form method="post" action="/savings/apply-due" class="inline-form">
+                <button type="submit" class="btn btn-secondary">Apply due contributions</button>
+            </form>
+            <a class="btn" href="/savings/new">New savings goal</a>
+        </div>
+    </div>
+
+    {% if summary.currency_code %}
+        <div class="stat-grid">
+            <div class="stat">
+                <span class="stat-label">Saved · {{ summary.currency_code }}</span>
+                <strong class="stat-value">{{ format_money(summary.total_saved, summary.currency_code, user.locale) }}</strong>
+            </div>
+            <div class="stat stat-alt">
+                <span class="stat-label">Targets · {{ summary.currency_code }}</span>
+                <strong class="stat-value">{{ format_money(summary.total_target, summary.currency_code, user.locale) }}</strong>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Monthly commitment</span>
+                <strong class="stat-value">{{ format_money(summary.monthly_commitment, summary.currency_code, user.locale) }}</strong>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Active goals</span>
+                <strong class="stat-value">{{ views | selectattr('goal.active') | list | length }}</strong>
+            </div>
+        </div>
+    {% else %}
+        <div class="flash flash-warning">No primary currency is configured.</div>
+    {% endif %}
+
+    {% if summary.warnings %}
+        <div class="flash flash-warning">
+            {% for warning in summary.warnings %}<div>{{ warning }}</div>{% endfor %}
+        </div>
+    {% endif %}
+
+    {% if views %}
+        <div class="card-grid">
+            {% for view in views %}
+                <article class="card account-card goal-card" style="border-left-color: {{ view.goal.color }};">
+                    <div class="row-between">
+                        <div>
+                            <h3>
+                                <span class="color-dot" style="background: {{ view.goal.color }};"></span>
+                                {{ view.goal.name }}
+                            </h3>
+                            <p class="muted small">
+                                {{ view.goal.currency_code }}
+                                {% if not view.goal.active %}<span class="badge">paused</span>{% endif %}
+                            </p>
+                        </div>
+                        <span class="badge">{{ view.progress | round(0) | int }}%</span>
+                    </div>
+
+                    <p class="amount">
+                        {{ format_money(view.saved, view.goal.currency_code, user.locale) }}
+                        {% if view.goal.target_amount and view.goal.target_amount > 0 %}
+                            <span class="muted small">
+                                of {{ format_money(view.goal.target_amount, view.goal.currency_code, user.locale) }}
+                            </span>
+                        {% endif %}
+                    </p>
+
+                    <div class="progress" role="progressbar" aria-valuenow="{{ view.progress | round(0) | int }}"
+                         aria-valuemin="0" aria-valuemax="100">
+                        <span style="width: {{ view.progress | round(1) }}%; background: {{ view.goal.color }};"></span>
+                    </div>
+
+                    <dl class="conversions">
+                        <div>
+                            <dt>Monthly</dt>
+                            <dd>{{ format_money(view.goal.monthly_contribution, view.goal.currency_code, user.locale) }}</dd>
+                        </div>
+                        <div>
+                            <dt>Next contribution</dt>
+                            <dd>{{ view.next_contribution or '—' }}</dd>
+                        </div>
+                    </dl>
+
+                    {% if view.goal.target_date or view.goal.notes %}
+                        <p class="muted small">
+                            {% if view.goal.target_date %}Target date {{ view.goal.target_date }}.{% endif %}
+                            {% if view.goal.notes %}{{ view.goal.notes }}{% endif %}
+                        </p>
+                    {% endif %}
+
+                    <div class="actions spread">
+                        <form method="post" action="/savings/{{ view.goal.id }}/contribute" class="inline-form contribution-form">
+                            <input type="text" name="amount" inputmode="decimal" placeholder="Add amount"
+                                   aria-label="Contribution amount for {{ view.goal.name }}" required>
+                            <button type="submit" class="btn btn-secondary btn-tiny">Add</button>
+                        </form>
+                        <div class="actions">
+                            <a class="btn btn-secondary btn-tiny" href="/savings/{{ view.goal.id }}/edit">Edit</a>
+                            <form method="post" action="/savings/{{ view.goal.id }}/delete" class="inline-form"
+                                  onsubmit="return confirm('Delete this savings goal and its contributions?');">
+                                <button type="submit" class="link-button danger">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card empty">
+            <p>No savings goals yet.</p>
+            <a class="btn" href="/savings/new">Create your first goal</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

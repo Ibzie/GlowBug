@@ -56,8 +56,9 @@ label. They are never silently treated as `1.0`.
 The default dashboard is editable:
 
 - **Edit dashboard** enables drag, resize, add, remove, and per-widget settings.
-- Widgets: net worth, account balances, income vs expenses, cash flow, recent
-  transactions, and exchange rate.
+- Widgets: net worth, balance by section, account balances, income vs expenses,
+  cash flow, recent transactions, spending by category, tax estimate, and
+  exchange rate.
 - Global range presets: 1M, 3M, 6M, YTD, 1Y, All.
 - Layouts are saved per dashboard; drag/resize changes persist automatically.
 
@@ -93,8 +94,9 @@ npm run build
 
 ## Statement import
 
-- `/transactions/import`: upload **CSV, XLSX, or PDF**, map its columns, preview
-  parsed rows, then import.
+- `/transactions/import`: choose the active account the statement belongs to,
+  upload **CSV, XLSX, or PDF**, map its columns, preview parsed rows, then
+  import.
 - Imports are **idempotent**: each row gets a SHA-256 fingerprint and re-importing
   the same statement skips existing rows.
 - After import, recurring payment patterns are detected and shown in a review
@@ -108,10 +110,38 @@ npm run build
   Tesseract language pack (for example `tesseract-ocr-deu`) in the image to
   read other languages.
 - `OCR_SCALE` (default `4`) controls render resolution: raise it for small
-  print, lower it for speed. `OCR_MAX_PAGES` (default `25`) caps a single
-  upload; split larger statements.
+  print, lower it for speed.
+- `OCR_BATCH_PAGES` (default `25`) is the OCR batch size. Larger PDFs are split
+  into batches automatically, and `OCR_PAGE_LIMIT` (default `200`) is the most
+  pages accepted in one upload.
 - OCR is best-effort: skewed pages, photos with heavy shadows, or multi-column
   layouts can misread cells. Review the preview before confirming.
+
+## Savings goals
+
+- `/savings`: multiple goals with a target amount, currency, colour, optional
+  target date, and a monthly contribution on a chosen day.
+- Goals are **virtual envelopes**: they earmark part of your balance. The money
+  stays in your accounts, and net worth is unchanged.
+- The page shows saved, remaining, progress, the next contribution, and a
+  per-goal colour. Contributions can also be added manually at any time.
+- The daily job at 07:00 UTC applies due monthly contributions. **Apply due
+  contributions** applies them immediately.
+- Automatic contributions never overshoot a goal target and run at most once
+  per goal per month. A goal that reaches its target stops contributing.
+- The **Balance by section** dashboard widget splits net worth into unallocated
+  money plus each active goal, using the goal colours. When goals exceed the
+  current balance, unallocated money is shown as zero with a warning.
+
+## Recurring income
+
+- `/income`: monthly income schedules with an amount, account, pay day, start
+  and optional end date, category, and notes.
+- On the pay day, a real deposit journal is posted to the account in the
+  account’s currency. The daily job at 07:00 UTC does this automatically;
+  **Apply due income** does it immediately.
+- A schedule posts at most once per month. Days past the end of a short month
+  are clamped to the last day. Ended and paused schedules are skipped.
 
 ## Subscriptions
 

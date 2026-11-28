@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Income · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Income</p>
+            <h1>Recurring income</h1>
+            <p class="muted">
+                Add a monthly income payment to an account on the day you choose. The deposit is posted
+                automatically by the daily job, or immediately with “Apply due income”.
+            </p>
+        </div>
+        <div class="actions">
+            <form method="post" action="/income/apply-due" class="inline-form">
+                <button type="submit" class="btn btn-secondary">Apply due income</button>
+            </form>
+            <a class="btn" href="/income/new">New income schedule</a>
+        </div>
+    </div>
+
+    {% if summary.currency_code %}
+        <div class="stat-grid">
+            <div class="stat">
+                <span class="stat-label">Scheduled monthly income · {{ summary.currency_code }}</span>
+                <strong class="stat-value">{{ format_money(summary.monthly_total, summary.currency_code, user.locale) }}</strong>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Active schedules</span>
+                <strong class="stat-value">{{ views | selectattr('schedule.active') | list | length }}</strong>
+            </div>
+        </div>
+    {% else %}
+        <div class="flash flash-warning">No primary currency is configured.</div>
+    {% endif %}
+
+    {% if summary.warnings %}
+        <div class="flash flash-warning">
+            {% for warning in summary.warnings %}<div>{{ warning }}</div>{% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card table-card">
+        <table>
+            <thead>
+            <tr>
+                <th>Schedule</th>
+                <th>Account</th>
+                <th>Pay day</th>
+                <th>Next payment</th>
+                <th>Category</th>
+                <th class="right">Amount</th>
+                <th class="right">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for view in views %}
+                <tr>
+                    <td>
+                        <strong>{{ view.schedule.name }}</strong>
+                        {% if not view.schedule.active %}<span class="badge">paused</span>{% endif %}
+                        {% if view.schedule.end_date %}
+                            <div class="muted small">Ends {{ view.schedule.end_date }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ view.schedule.account.name if view.schedule.account else '—' }}</td>
+                    <td>{{ view.schedule.day_of_month }}</td>
+                    <td class="nowrap">{{ view.next_payment or '—' }}</td>
+                    <td>{{ view.schedule.category.name if view.schedule.category else '—' }}</td>
+                    <td class="right">{{ format_money(view.schedule.amount, view.schedule.currency_code, user.locale) }}</td>
+                    <td class="right">
+                        <a class="text-link" href="/income/{{ view.schedule.id }}/edit">Edit</a>
+                        <form method="post" action="/income/{{ view.schedule.id }}/delete" class="inline-form"
+                              onsubmit="return confirm('Delete this income schedule? Past deposits are kept.');">
+                            <button type="submit" class="link-button danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if not views %}
+                <tr>
+                    <td colspan="7" class="empty">No recurring income yet.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="muted small">
+        Income is paid in the account’s currency. Days beyond the end of a month are clamped to that
+        month’s last day.
+    </p>
+</div>
+{% endblock %}

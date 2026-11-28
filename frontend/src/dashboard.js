@@ -69,6 +69,8 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         number: "Number",
         bar: "Bar chart",
         line: "Line chart",
+        doughnut: "Doughnut chart",
+        pie: "Pie chart",
         table: "Table",
     };
 
@@ -187,12 +189,15 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
         appendWarnings(body, payload.warnings);
     }
 
-    function styleDataset(dataset, index, chartType) {
+    function styleDataset(dataset, index, chartType, payload) {
         const color = palette[index % palette.length];
         if (chartType === "doughnut" || chartType === "pie") {
+            const explicitColors = Array.isArray(payload?.colors) ? payload.colors : [];
             return {
                 ...dataset,
-                backgroundColor: (dataset.data || []).map((_, itemIndex) => palette[itemIndex % palette.length]),
+                backgroundColor: (dataset.data || []).map(
+                    (_, itemIndex) => explicitColors[itemIndex] || palette[itemIndex % palette.length],
+                ),
                 borderColor: "#ffffff",
                 borderWidth: 2,
             };
@@ -314,13 +319,19 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
             data: {
                 labels: payload.labels || [],
                 datasets: (payload.datasets || []).map((dataset, index) =>
-                    styleDataset(dataset, index, payload.chart),
+                    styleDataset(dataset, index, payload.chart, payload),
                 ),
             },
             options: chartOptions(payload),
         });
 
         chartInstances.set(widget.id, chart);
+        if (payload.subtitle) {
+            const note = document.createElement("p");
+            note.className = "muted small";
+            note.textContent = payload.subtitle;
+            wrapper.appendChild(note);
+        }
         appendWarnings(body, payload.warnings);
     }
 

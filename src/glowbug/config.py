@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     ocr_scale: int = 4
     ocr_min_confidence: float = 20.0
     ocr_psm: int = 6
-    ocr_max_pages: int = 25
+    ocr_batch_pages: int = 25
+    ocr_page_limit: int = 200
     tesseract_cmd: str = "tesseract"
 
 

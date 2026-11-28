@@ -284,6 +284,7 @@ async def test_csv_import_is_idempotent_and_detects_subscription(
 
     response = await client.post(
         "/transactions/import/upload",
+        data={"account_id": str(account.id)},
         files={"file": ("statement.csv", csv_data, "text/csv")},
     )
     assert response.status_code == 200
@@ -340,6 +341,7 @@ async def test_csv_import_is_idempotent_and_detects_subscription(
     # Upload and import the same file again: no duplicate transactions.
     response = await client.post(
         "/transactions/import/upload",
+        data={"account_id": str(account.id)},
         files={"file": ("statement.csv", csv_data, "text/csv")},
     )
     token_match = re.search(r'name="token" value="([^"]+)"', response.text)
@@ -353,8 +355,12 @@ async def test_csv_import_is_idempotent_and_detects_subscription(
     assert len(journals) == 4
 
 
-async def test_xlsx_upload_is_accepted(client: httpx.AsyncClient) -> None:
+async def test_xlsx_upload_is_accepted(client: httpx.AsyncClient, session: AsyncSession) -> None:
     await complete_setup(client)
+    user = await session.scalar(select(User).where(User.email == SETUP_DATA["email"]))
+    assert user is not None
+    account = await session.scalar(select(Account).where(Account.user_id == user.id, Account.name == "Bank"))
+    assert account is not None
 
     workbook = Workbook()
     sheet = workbook.active
@@ -366,6 +372,7 @@ async def test_xlsx_upload_is_accepted(client: httpx.AsyncClient) -> None:
 
     response = await client.post(
         "/transactions/import/upload",
+        data={"account_id": str(account.id)},
         files={
             "file": (
                 "statement.xlsx",
@@ -378,6 +385,13 @@ async def test_xlsx_upload_is_accepted(client: httpx.AsyncClient) -> None:
     assert "Map “statement.xlsx”" in response.text
     assert "Description" in response.text
     assert "NETFLIX" in response.text
+    assert f'<option value="{account.id}" selected>' in response.text
+
+    page = await client.get("/transactions/import")
+    assert page.status_code == 200
+    assert "Upload statement" in page.text
+    assert f'<option value="{account.id}" selected>' in page.text
+    assert "Bank (PKR)" in page.text
 
 
 async def test_categories_seeded_and_custom_category(client: httpx.AsyncClient) -> None:
@@ -486,3 +500,43 @@ async def test_setup_rejects_same_primary_and_secondary(client: httpx.AsyncClien
     response = await post_form(client, "/setup", {key: [value] for key, value in data.items()})
     assert response.status_code == 400
     assert "must be different" in response.text
+
+
+async def test_savings_and_income_pages(client: httpx.AsyncClient, session: AsyncSession) -> None:
+    await complete_setup(client)
+
+    response = await client.get("/savings")
+    assert response.status_code == 200
+    assert "Savings goals" in response.text
+
+    page = await client.get("/savings/new")
+    assert page.status_code == 200
+
+    response = await post_form(
+        client,
+        "/savings",
+        {
+            "name": ["Holiday"],
+            "target_amount": ["50000"],
+            "currency_code": ["PKR"],
+            "monthly_contribution": ["5000"],
+            "contribution_day": ["1"],
+            "start_date": [date.today().isoformat()],
+            "target_date": [""],
+            "color": ["#2f6fed"],
+            "notes": [""],
+            "active": ["1"],
+        },
+    )
+    assert response.status_code == 303
+    page = await client.get("/savings")
+    assert "Holiday" in page.text
+    assert "5,000" in page.text
+
+    response = await client.get("/income")
+    assert response.status_code == 200
+    assert "Recurring income" in response.text
+
+    page = await client.get("/income/new")
+    assert page.status_code == 200
+    assert "New income schedule" in page.text
