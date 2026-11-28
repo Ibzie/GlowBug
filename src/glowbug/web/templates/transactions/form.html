@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}New transaction · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Transactions</p>
+        <h1>New transaction</h1>
+    </div>
+
+    <form method="post" action="/transactions" class="card form">
+        <div class="form-grid">
+            <label class="field">
+                <span>Type</span>
+                <select name="type" data-transaction-type>
+                    {% for value, label in transaction_types %}
+                        <option value="{{ value }}" {% if values.type == value or (not values.type and value == 'withdrawal') %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Date</span>
+                <input type="date" name="date" value="{{ values.date or '' }}" required>
+            </label>
+        </div>
+
+        <label class="field">
+            <span>Description</span>
+            <input type="text" name="description" value="{{ values.description or '' }}" maxlength="512" required autofocus>
+        </label>
+
+        <div class="form-grid">
+            <label class="field">
+                <span>Amount</span>
+                <input type="text" name="amount" inputmode="decimal" value="{{ values.amount or '' }}" placeholder="0.00" required>
+            </label>
+            <label class="field">
+                <span>Account</span>
+                <select name="account_id" required>
+                    <option value="">Choose an account…</option>
+                    {% for account in accounts %}
+                        <option value="{{ account.id }}" {% if values.account_id == account.id|string %}selected{% endif %}>
+                            {{ account.name }} ({{ account.currency_code }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field" data-destination-field>
+                <span>Destination account</span>
+                <select name="destination_account_id">
+                    <option value="">Same as source for now…</option>
+                    {% for account in accounts %}
+                        <option value="{{ account.id }}" {% if values.destination_account_id == account.id|string %}selected{% endif %}>
+                            {{ account.name }} ({{ account.currency_code }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Category</span>
+                <select name="category_id">
+                    <option value="">Uncategorized</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if values.category_id == category.id|string %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <label class="field">
+            <span>Notes</span>
+            <textarea name="notes" rows="3">{{ values.notes or '' }}</textarea>
+        </label>
+
+        <div class="actions">
+            <a class="btn btn-ghost" href="/transactions">Cancel</a>
+            <button class="btn" type="submit">Create transaction</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -13,7 +13,10 @@
     {% if user is defined and user %}
         <nav>
             <a href="/">Dashboard</a>
+            <a href="/transactions">Transactions</a>
+            <a href="/subscriptions">Subscriptions</a>
             <a href="/accounts">Accounts</a>
+            <a href="/categories">Categories</a>
             <a href="/settings/currencies">Currencies</a>
             <form method="post" action="/logout" class="inline-form">
                 <button type="submit" class="link-button">Log out</button>

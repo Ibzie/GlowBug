@@ -1,3 +1,5 @@
+import re
+from datetime import date
 from urllib.parse import urlencode
 
 import httpx
@@ -5,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from glowbug.models.account import Account
+from glowbug.models.category import Category
+from glowbug.models.transaction import TransactionJournal
 from glowbug.models.user import User, UserCurrency
 from glowbug.services.accounts import get_primary_currency, get_secondary_currency
 from glowbug.services.settings import set_setting
@@ -207,6 +211,162 @@ async def test_dashboard_shows_last_sync_discreetly(
     assert response.status_code == 200
     assert "last sync" in response.text.lower()
     assert "28 Nov 2026" in response.text
+
+
+async def test_transactions_page_and_create(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    await complete_setup(client)
+
+    response = await client.get("/transactions")
+    assert response.status_code == 200
+    assert "Transactions" in response.text
+
+    user = await session.scalar(select(User).where(User.email == SETUP_DATA["email"]))
+    assert user is not None
+    account = await session.scalar(select(Account).where(Account.user_id == user.id, Account.name == "Bank"))
+    assert account is not None
+    category = await session.scalar(
+        select(Category).where(Category.user_id == user.id, Category.normalized_name == "groceries")
+    )
+    assert category is not None
+
+    response = await post_form(
+        client,
+        "/transactions",
+        {
+            "type": ["withdrawal"],
+            "date": [date.today().isoformat()],
+            "description": ["Weekly groceries"],
+            "amount": ["75.25"],
+            "account_id": [str(account.id)],
+            "destination_account_id": [""],
+            "category_id": [str(category.id)],
+            "notes": [""],
+        },
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/transactions"
+
+    response = await client.get("/transactions")
+    assert response.status_code == 200
+    assert "Weekly groceries" in response.text
+    assert "Groceries" in response.text
+
+
+async def test_csv_import_is_idempotent_and_detects_subscription(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    await complete_setup(client)
+    user = await session.scalar(select(User).where(User.email == SETUP_DATA["email"]))
+    assert user is not None
+    account = await session.scalar(select(Account).where(Account.user_id == user.id, Account.name == "Bank"))
+    assert account is not None
+    subscriptions_category = await session.scalar(
+        select(Category).where(Category.user_id == user.id, Category.normalized_name == "subscriptions")
+    )
+    assert subscriptions_category is not None
+
+    csv_data = (
+        b"date,description,amount,category\n"
+        b"2026-01-15,NETFLIX,15.99,Subscriptions\n"
+        b"2026-02-15,NETFLIX,15.99,Subscriptions\n"
+        b"2026-03-15,NETFLIX,15.99,Subscriptions\n"
+        b"2026-01-20,COFFEE SHOP,4.50,Food & dining\n"
+    )
+
+    response = await client.post(
+        "/transactions/import/upload",
+        files={"file": ("statement.csv", csv_data, "text/csv")},
+    )
+    assert response.status_code == 200
+    token_match = re.search(r'name="token" value="([^"]+)"', response.text)
+    assert token_match is not None
+    token = token_match.group(1)
+
+    mapping = {
+        "token": [token],
+        "date_column": ["date"],
+        "description_column": ["description"],
+        "amount_column": ["amount"],
+        "currency_column": [""],
+        "category_column": ["category"],
+        "account_id": [str(account.id)],
+        "date_format": ["%Y-%m-%d"],
+        "sign_convention": ["expense"],
+    }
+
+    response = await post_form(client, "/transactions/import/preview", mapping)
+    assert response.status_code == 200
+    assert "4 row(s) parsed" in response.text
+    assert "NETFLIX" in response.text
+
+    response = await post_form(client, "/transactions/import/confirm", mapping)
+    assert response.status_code == 200
+    assert "Statement processed" in response.text
+    assert "Recurring payments found" in response.text
+    assert "Create subscription" in response.text
+
+    journal_count = len(
+        list(await session.scalars(select(TransactionJournal).where(TransactionJournal.user_id == user.id)))
+    )
+    assert journal_count == 4
+
+    response = await post_form(
+        client,
+        "/subscriptions/from-candidate",
+        {
+            "name": ["NETFLIX"],
+            "merchant_key": ["netflix"],
+            "amount": ["15.99"],
+            "currency_code": [account.currency_code],
+            "frequency": ["monthly"],
+            "next_due_date": ["2026-04-15"],
+            "account_id": [str(account.id)],
+            "category_id": [str(subscriptions_category.id)],
+        },
+    )
+    assert response.status_code == 303
+    response = await client.get("/subscriptions")
+    assert "NETFLIX" in response.text
+
+    # Upload and import the same file again: no duplicate transactions.
+    response = await client.post(
+        "/transactions/import/upload",
+        files={"file": ("statement.csv", csv_data, "text/csv")},
+    )
+    token_match = re.search(r'name="token" value="([^"]+)"', response.text)
+    assert token_match is not None
+    mapping["token"] = [token_match.group(1)]
+    response = await post_form(client, "/transactions/import/confirm", mapping)
+    assert response.status_code == 200
+    assert "Statement processed" in response.text
+
+    journals = list(await session.scalars(select(TransactionJournal).where(TransactionJournal.user_id == user.id)))
+    assert len(journals) == 4
+
+
+async def test_categories_seeded_and_custom_category(client: httpx.AsyncClient) -> None:
+    await complete_setup(client)
+
+    response = await client.get("/categories")
+    assert response.status_code == 200
+    assert "Groceries" in response.text
+    assert "Food &amp; dining" in response.text
+
+    response = await post_form(
+        client,
+        "/categories",
+        {"name": ["Coffee"], "color": ["#123456"]},
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/categories"
+
+    response = await client.get("/categories")
+    assert response.status_code == 200
+    assert "Coffee" in response.text
 
 
 async def test_setup_rejects_mismatched_passwords(client: httpx.AsyncClient) -> None:

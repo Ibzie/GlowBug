@@ -54,6 +54,7 @@ class Account(Base):
     opening_balance_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     include_in_net_worth: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -30,6 +30,7 @@ build/
 *.db
 media/
 backups/
+storage/imports/
 
 .DS_Store
 .idea/

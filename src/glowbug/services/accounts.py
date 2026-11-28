@@ -20,10 +20,13 @@ async def list_accounts(
     user_id: UUID,
     *,
     include_archived: bool = False,
+    include_system: bool = False,
 ) -> list[Account]:
     statement = select(Account).where(Account.user_id == user_id).order_by(Account.created_at, Account.name)
     if not include_archived:
         statement = statement.where(Account.archived.is_(False))
+    if not include_system:
+        statement = statement.where(Account.is_system.is_(False))
 
     return list(await session.scalars(statement))
 

@@ -1,3 +1,18 @@
+document.querySelectorAll("[data-transaction-type]").forEach((select) => {
+    const form = select.closest("form");
+    const destination = form?.querySelector("[data-destination-field]");
+    if (!(select instanceof HTMLSelectElement) || !(destination instanceof HTMLElement)) {
+        return;
+    }
+
+    const update = () => {
+        destination.hidden = select.value !== "transfer";
+    };
+
+    select.addEventListener("change", update);
+    update();
+});
+
 document.querySelectorAll("[data-currency-search]").forEach((input) => {
     const selectors = (input.dataset.currencyTarget || "")
         .split(",")

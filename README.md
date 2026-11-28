@@ -67,6 +67,53 @@ cd frontend
 npm run build
 ```
 
+## Transactions and categories
+
+- `/transactions`: filter by range/category/uncategorized, create withdrawals,
+  deposits, and transfers, and assign categories inline.
+- Default categories are seeded per user: Bills, Food & dining, Groceries,
+  Leisure, Travel, Transport, Health, Shopping, Housing, Utilities,
+  Subscriptions, and more.
+- Create custom categories at `/categories`.
+- The dashboard includes a **Spending by category** widget, and the recent
+  transactions widget shows each transaction's category.
+
+## CSV import
+
+- `/transactions/import`: upload a statement, map its columns, preview parsed
+  rows, then import.
+- Imports are **idempotent**: each row gets a SHA-256 fingerprint and re-importing
+  the same statement skips existing rows.
+- After import, recurring payment patterns are detected and shown in a review
+  page where you can register them as subscriptions.
+- Uploaded files are temporary and stored under `storage/imports/`.
+
+## Subscriptions
+
+- `/subscriptions`: recurring payments with amount and currency, frequency
+  (weekly, monthly, quarterly, yearly), next due date, category, and account.
+- Detected subscriptions are never created automatically; you confirm them.
+- Duplicate registrations are prevented by a merchant + amount + currency +
+  frequency signature.
+
+## Category inference
+
+Transaction categories are inferred without regex rules and without an LLM:
+
+1. **Merchant memory** — exact normalized descriptions you have confirmed.
+2. **Fuzzy merchant matching** — catches small spelling and suffix variations.
+3. **Character n-gram Naive Bayes** — a small local model trained from your
+   confirmed merchants, including enough context to learn patterns such as
+   “subscription”, “fuel”, or “market”.
+
+When confidence is low, the transaction stays uncategorized and the transactions
+page asks you to choose. Selecting a category with **Remember** stores the
+merchant attribution, applies it to matching uncategorized transactions, and
+feeds the next model update. Local shops are learned from these confirmations;
+the system improves as you use it. The inference layer is intentionally
+replaceable, so a small embedding model can be added later without changing the
+UI or merchant-memory data.
+
 ## Exchange rates
 
 Rates come from **Frankfurter v2** only. There is no fallback provider.

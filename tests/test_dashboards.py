@@ -94,12 +94,12 @@ async def test_dashboard_api_crud(api_context) -> None:  # type: ignore[no-untyp
     response = await client.get("/api/widget-catalog")
     assert response.status_code == 200
     types = {item["type"] for item in response.json()}
-    assert {"net_worth", "account_balances", "income_expense", "fx_rate"} <= types
+    assert {"net_worth", "account_balances", "income_expense", "category_spend", "fx_rate"} <= types
 
     response = await client.get(f"/api/dashboards/{dashboard.id}")
     assert response.status_code == 200
     body = response.json()
-    assert len(body["widgets"]) == 6
+    assert len(body["widgets"]) == 7
 
     net_worth = next(widget for widget in body["widgets"] if widget["type"] == "net_worth")
     response = await client.get(f"/api/widgets/{net_worth['id']}/data")
@@ -162,7 +162,7 @@ async def test_default_dashboard_is_idempotent(session: AsyncSession) -> None:
     second = await get_or_create_default_dashboard(session, user)
 
     assert first.id == second.id
-    assert len(second.widgets) == 6
+    assert len(second.widgets) == 7
 
 
 async def test_income_expense_widget_data(session: AsyncSession) -> None:

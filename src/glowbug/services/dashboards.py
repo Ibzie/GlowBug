@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, localcontext
 from typing import Any
@@ -12,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from glowbug.enums import AccountType, JournalType
 from glowbug.models.account import Account
+from glowbug.models.category import Category
 from glowbug.models.dashboard import Dashboard, DashboardWidget
 from glowbug.models.transaction import Transaction, TransactionJournal
 from glowbug.models.user import User
@@ -61,6 +63,15 @@ WIDGET_CATALOG: list[dict[str, Any]] = [
         "default_size": {"w": 6, "h": 3},
     },
     {
+        "type": "category_spend",
+        "name": "Spending by category",
+        "description": "Spending per category in your primary currency.",
+        "visualizations": ["doughnut", "bar"],
+        "default_title": "Spending by category",
+        "default_config": {"visualization": "doughnut", "currency_mode": "primary"},
+        "default_size": {"w": 6, "h": 3},
+    },
+    {
         "type": "recent_transactions",
         "name": "Recent transactions",
         "description": "Your latest journal entries.",
@@ -91,6 +102,7 @@ def default_widgets() -> list[dict[str, Any]]:
         {"type": "cash_flow", "layout": {"x": 6, "y": 3, "w": 6, "h": 3}},
         {"type": "recent_transactions", "layout": {"x": 0, "y": 6, "w": 7, "h": 3}},
         {"type": "fx_rate", "layout": {"x": 7, "y": 6, "w": 5, "h": 2}},
+        {"type": "category_spend", "layout": {"x": 0, "y": 9, "w": 6, "h": 3}},
     ]
 
 
@@ -391,11 +403,25 @@ async def build_widget_data(
             "warnings": warnings,
         }
 
+    if widget.type == "category_spend":
+        labels, values, warnings = await category_spend_series(session, user, start, end, primary.code)
+        chart = config.get("visualization")
+        if chart not in {"doughnut", "bar"}:
+            chart = "doughnut"
+        return {
+            "kind": "chart",
+            "chart": chart,
+            "labels": labels,
+            "datasets": [{"label": f"Spending ({primary.code})", "data": values}],
+            "currency": primary.code,
+            "warnings": warnings,
+        }
+
     if widget.type == "recent_transactions":
         rows = await recent_transactions(session, user, start, end, int(config.get("limit", 8)))
         return {
             "kind": "table",
-            "columns": ["Date", "Description", "Type", "Amount"],
+            "columns": ["Date", "Description", "Category", "Type", "Amount"],
             "rows": rows,
             "warnings": [],
         }
@@ -515,6 +541,64 @@ async def income_expense_series(
     )
 
 
+async def category_spend_series(
+    session: AsyncSession,
+    user: User,
+    start: date,
+    end: date,
+    primary_code: str,
+) -> tuple[list[str], list[float], list[str]]:
+    statement = (
+        select(
+            Category.name,
+            TransactionJournal.currency_code,
+            TransactionJournal.date,
+            Transaction.amount,
+        )
+        .join(Transaction, Transaction.journal_id == TransactionJournal.id)
+        .join(Account, Account.id == Transaction.account_id)
+        .outerjoin(Category, Category.id == TransactionJournal.category_id)
+        .where(
+            TransactionJournal.user_id == user.id,
+            TransactionJournal.date >= start,
+            TransactionJournal.date <= end,
+            TransactionJournal.type == JournalType.WITHDRAWAL.value,
+            Account.type.in_([AccountType.ASSET.value, AccountType.CASH.value]),
+        )
+    )
+    rows = (await session.execute(statement)).all()
+    totals: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    converter = ExchangeRateService(session)
+    cache: dict[tuple[str, date], Decimal | None] = {}
+    warnings: set[str] = set()
+
+    for row in rows:
+        if row.amount >= 0:
+            continue
+        amount = -row.amount
+        if row.currency_code != primary_code:
+            key = (row.currency_code, row.date)
+            if key not in cache:
+                try:
+                    rate, _ = await converter.get_rate(row.currency_code, primary_code, row.date)
+                    cache[key] = rate
+                except RateUnavailableError:
+                    cache[key] = None
+                    warnings.add(f"No {row.currency_code}/{primary_code} rate for {row.date.isoformat()}.")
+            rate = cache[key]
+            if rate is None:
+                continue
+            amount *= rate
+        totals[row.name or "Uncategorized"] += amount
+
+    ordered = sorted(totals.items(), key=lambda item: item[1], reverse=True)
+    return (
+        [name for name, _ in ordered],
+        [float(value) for _, value in ordered],
+        sorted(warnings),
+    )
+
+
 async def recent_transactions(
     session: AsyncSession,
     user: User,
@@ -529,7 +613,10 @@ async def recent_transactions(
             TransactionJournal.date >= start,
             TransactionJournal.date <= end,
         )
-        .options(selectinload(TransactionJournal.transactions))
+        .options(
+            selectinload(TransactionJournal.transactions),
+            selectinload(TransactionJournal.category),
+        )
         .order_by(TransactionJournal.date.desc(), TransactionJournal.created_at.desc())
         .limit(limit)
     )
@@ -541,6 +628,7 @@ async def recent_transactions(
             [
                 journal.date.isoformat(),
                 journal.description,
+                journal.category.name if journal.category is not None else "Uncategorized",
                 journal.type,
                 format_money(amount, journal.currency_code, user.locale),
             ]

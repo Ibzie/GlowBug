@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{% if subscription %}Edit subscription{% else %}New subscription{% endif %} · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Subscriptions</p>
+        <h1>{% if subscription %}Edit “{{ subscription.name }}”{% else %}New subscription{% endif %}</h1>
+    </div>
+
+    <form method="post" action="{% if subscription %}/subscriptions/{{ subscription.id }}{% else %}/subscriptions{% endif %}" class="card form">
+        <label class="field">
+            <span>Name</span>
+            <input type="text" name="name" value="{{ values.name or '' }}" maxlength="120" required autofocus>
+        </label>
+        <div class="form-grid">
+            <label class="field">
+                <span>Amount</span>
+                <input type="text" name="amount" inputmode="decimal" value="{{ values.amount or '' }}" required>
+            </label>
+            <label class="field">
+                <span>Currency</span>
+                <select name="currency_code">
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" {% if values.currency_code == currency.code %}selected{% endif %}>
+                            {{ currency.code }} — {{ currency.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Frequency</span>
+                <select name="frequency">
+                    {% for value, label in frequencies %}
+                        <option value="{{ value }}" {% if values.frequency == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Next due date</span>
+                <input type="date" name="next_due_date" value="{{ values.next_due_date or '' }}" required>
+            </label>
+            <label class="field">
+                <span>Account <span class="muted">(optional)</span></span>
+                <select name="account_id">
+                    <option value="">None</option>
+                    {% for account in accounts %}
+                        <option value="{{ account.id }}" {% if values.account_id == account.id|string %}selected{% endif %}>
+                            {{ account.name }} ({{ account.currency_code }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Category <span class="muted">(optional)</span></span>
+                <select name="category_id">
+                    <option value="">Uncategorized</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if values.category_id == category.id|string %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <label class="checkbox-field">
+            <input type="checkbox" name="active" value="1" {% if values.active %}checked{% endif %}>
+            <span>Active</span>
+        </label>
+        <div class="actions">
+            <a class="btn btn-ghost" href="/subscriptions">Cancel</a>
+            <button class="btn" type="submit">{% if subscription %}Save subscription{% else %}Create subscription{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

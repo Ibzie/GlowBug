@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Map CSV columns · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero">
+        <p class="eyebrow">Import</p>
+        <h1>Map “{{ filename }}”</h1>
+        <p class="muted">Choose which column contains each field. Dates are interpreted with the selected format.</p>
+    </div>
+
+    <form method="post" action="/transactions/import/preview" class="card form">
+        <input type="hidden" name="token" value="{{ token }}">
+
+        <div class="form-grid">
+            <label class="field">
+                <span>Date column</span>
+                <select name="date_column" required>
+                    {% for header in headers %}
+                        <option value="{{ header }}">{{ header }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Description column</span>
+                <select name="description_column" required>
+                    {% for header in headers %}
+                        <option value="{{ header }}">{{ header }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Amount column</span>
+                <select name="amount_column" required>
+                    {% for header in headers %}
+                        <option value="{{ header }}">{{ header }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Currency column <span class="muted">(optional)</span></span>
+                <select name="currency_column">
+                    <option value="">Use account currency</option>
+                    {% for header in headers %}
+                        <option value="{{ header }}">{{ header }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Category column <span class="muted">(optional)</span></span>
+                <select name="category_column">
+                    <option value="">Not provided</option>
+                    {% for header in headers %}
+                        <option value="{{ header }}">{{ header }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Account</span>
+                <select name="account_id" required>
+                    {% for account in accounts %}
+                        <option value="{{ account.id }}">{{ account.name }} ({{ account.currency_code }})</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Date format</span>
+                <select name="date_format">
+                    {% for fmt in date_formats %}
+                        <option value="{{ fmt }}">{{ fmt }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="field">
+                <span>Amount sign</span>
+                <select name="sign_convention">
+                    <option value="expense">Positive = expense, negative = income</option>
+                    <option value="income">Positive = income, negative = expense</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="section-heading">
+            <h2>Sample rows</h2>
+        </div>
+        <div class="table-card">
+            <table>
+                <thead>
+                <tr>
+                    {% for header in headers %}
+                        <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in sample_rows %}
+                    <tr>
+                        {% for header in headers %}
+                            <td>{{ row.get(header, '') }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="actions">
+            <a class="btn btn-ghost" href="/transactions/import">Upload another file</a>
+            <button class="btn" type="submit">Preview import</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

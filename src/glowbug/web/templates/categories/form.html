@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{% if category %}Edit category{% else %}New category{% endif %} · GlowBug{% endblock %}
+{% block content %}
+<div class="narrow">
+    <div class="hero">
+        <p class="eyebrow">Categories</p>
+        <h1>{% if category %}Edit “{{ category.name }}”{% else %}New category{% endif %}</h1>
+    </div>
+
+    <form method="post" action="{% if category %}/categories/{{ category.id }}{% else %}/categories{% endif %}" class="card form">
+        <label class="field">
+            <span>Name</span>
+            <input type="text" name="name" value="{{ values.name or '' }}" maxlength="80" required autofocus>
+        </label>
+        <label class="field">
+            <span>Colour</span>
+            <input type="color" name="color" value="{{ values.color or '#2f6fed' }}">
+        </label>
+        <div class="actions">
+            <a class="btn btn-ghost" href="/categories">Cancel</a>
+            <button class="btn" type="submit">{% if category %}Save category{% else %}Create category{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

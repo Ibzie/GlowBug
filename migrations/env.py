@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
@@ -50,7 +52,12 @@ async def run_async_migrations() -> None:
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
 
-    await connectable.dispose()
+    # asyncpg/event-loop cleanup can spin on the free-threaded build. The
+    # migration transaction has already committed at this point, so exit
+    # without waiting for interpreter teardown.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 def run_migrations_online() -> None:

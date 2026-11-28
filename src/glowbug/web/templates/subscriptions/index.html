@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Subscriptions · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Subscriptions</p>
+            <h1>Recurring payments</h1>
+            <p class="muted">Subscriptions are detected from imported statements and can also be added manually.</p>
+        </div>
+        <a class="btn" href="/subscriptions/new">New subscription</a>
+    </div>
+
+    <div class="card table-card">
+        <table>
+            <thead>
+            <tr>
+                <th>Subscription</th>
+                <th>Frequency</th>
+                <th>Next due</th>
+                <th>Category</th>
+                <th>Account</th>
+                <th class="right">Amount</th>
+                <th class="right">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for subscription in subscriptions %}
+                <tr>
+                    <td>
+                        <strong>{{ subscription.name }}</strong>
+                        <div class="muted small">{{ subscription.source }}</div>
+                        {% if not subscription.active %}<span class="badge">paused</span>{% endif %}
+                    </td>
+                    <td>{{ subscription.frequency|capitalize }}</td>
+                    <td class="nowrap">{{ subscription.next_due_date }}</td>
+                    <td>{{ subscription.category.name if subscription.category else '—' }}</td>
+                    <td>{{ subscription.account.name if subscription.account else '—' }}</td>
+                    <td class="right">{{ format_money(subscription.amount, subscription.currency_code, user.locale) }}</td>
+                    <td class="right">
+                        <a class="text-link" href="/subscriptions/{{ subscription.id }}/edit">Edit</a>
+                        <form method="post" action="/subscriptions/{{ subscription.id }}/delete" class="inline-form"
+                              onsubmit="return confirm('Delete this subscription?');">
+                            <button type="submit" class="link-button danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if not subscriptions %}
+                <tr>
+                    <td colspan="7" class="empty">No subscriptions yet.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="actions">
+        <a class="btn btn-secondary" href="/transactions">Back to transactions</a>
+    </div>
+</div>
+{% endblock %}

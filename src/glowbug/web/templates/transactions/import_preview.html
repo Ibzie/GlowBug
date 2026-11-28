@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Preview import · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero">
+        <p class="eyebrow">Import</p>
+        <h1>Preview import</h1>
+        <p class="muted">
+            {{ total_rows }} row(s) parsed for {{ account.name }} ({{ account.currency_code }}).
+            {{ duplicate_count }} duplicate(s) will be skipped.
+        </p>
+    </div>
+
+    {% if errors %}
+        <div class="flash flash-warning">
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card table-card">
+        <table>
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th class="right">Amount</th>
+                <th>Category</th>
+                <th>Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for entry in rows %}
+                <tr>
+                    <td class="nowrap">{{ entry.row.journal_date }}</td>
+                    <td>{{ entry.row.description }}</td>
+                    <td><span class="badge">{{ entry.row.transaction_type }}</span></td>
+                    <td class="right">{{ format_money(entry.row.amount, entry.row.currency_code, user.locale) }}</td>
+                    <td>
+                        {% if entry.row.category_name %}
+                            {{ entry.row.category_name }}
+                        {% elif entry.suggestion %}
+                            <span class="muted">{{ entry.suggestion }} <small>(suggested)</small></span>
+                        {% else %}
+                            <span class="muted">Needs review</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if entry.duplicate %}
+                            <span class="badge">duplicate</span>
+                        {% else %}
+                            <span class="badge">new</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <form method="post" action="/transactions/import/confirm" class="card form import-confirm">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="date_column" value="{{ mapping.date_column }}">
+        <input type="hidden" name="description_column" value="{{ mapping.description_column }}">
+        <input type="hidden" name="amount_column" value="{{ mapping.amount_column }}">
+        <input type="hidden" name="currency_column" value="{{ mapping.currency_column }}">
+        <input type="hidden" name="category_column" value="{{ mapping.category_column }}">
+        <input type="hidden" name="account_id" value="{{ mapping.account_id }}">
+        <input type="hidden" name="date_format" value="{{ mapping.date_format }}">
+        <input type="hidden" name="sign_convention" value="{% if mapping.positive_is_expense %}expense{% else %}income{% endif %}">
+
+        <div class="actions">
+            <a class="btn btn-ghost" href="/transactions/import">Start over</a>
+            <button class="btn" type="submit">Import {{ total_rows }} row(s)</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

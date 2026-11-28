@@ -10,7 +10,11 @@ from glowbug.api.dashboards import router as dashboards_router
 from glowbug.api.fx import router as fx_router
 from glowbug.api.health import router as health_router
 from glowbug.config import get_settings
+from glowbug.web.categories import router as categories_router
+from glowbug.web.imports import router as imports_router
 from glowbug.web.routes import router as web_router
+from glowbug.web.subscriptions import router as subscriptions_router
+from glowbug.web.transactions import router as transactions_router
 
 
 def create_app() -> FastAPI:
@@ -32,6 +36,10 @@ def create_app() -> FastAPI:
     app.include_router(fx_router)
     app.include_router(dashboards_router)
     app.include_router(web_router)
+    app.include_router(categories_router)
+    app.include_router(transactions_router)
+    app.include_router(imports_router)
+    app.include_router(subscriptions_router)
 
     return app
 

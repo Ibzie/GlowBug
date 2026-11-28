@@ -10,8 +10,10 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Numeric,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -22,6 +24,7 @@ from glowbug.db.types import Money
 
 if TYPE_CHECKING:
     from glowbug.models.account import Account
+    from glowbug.models.category import Category
     from glowbug.models.currency import Currency
     from glowbug.models.user import User
 
@@ -31,6 +34,8 @@ class TransactionJournal(Base):
     __table_args__ = (
         Index("ix_transaction_journals_user_date", "user_id", "date"),
         Index("ix_transaction_journals_user_type_date", "user_id", "type", "date"),
+        Index("ix_transaction_journals_category", "category_id"),
+        UniqueConstraint("user_id", "import_fingerprint", name="uq_transaction_journals_user_import"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -48,6 +53,15 @@ class TransactionJournal(Base):
         nullable=False,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    category_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    category_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
+    import_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    import_batch_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -56,6 +70,7 @@ class TransactionJournal(Base):
 
     user: Mapped[User] = relationship()
     currency: Mapped[Currency] = relationship(foreign_keys=[currency_code])
+    category: Mapped[Category | None] = relationship()
     transactions: Mapped[list[Transaction]] = relationship(
         back_populates="journal",
         cascade="all, delete-orphan",

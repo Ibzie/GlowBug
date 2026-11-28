@@ -186,6 +186,14 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
 
     function styleDataset(dataset, index, chartType) {
         const color = palette[index % palette.length];
+        if (chartType === "doughnut" || chartType === "pie") {
+            return {
+                ...dataset,
+                backgroundColor: (dataset.data || []).map((_, itemIndex) => palette[itemIndex % palette.length]),
+                borderColor: "#ffffff",
+                borderWidth: 2,
+            };
+        }
         if (dataset.label === "Income") {
             return {
                 ...dataset,
@@ -221,6 +229,28 @@ if (bootstrapElement instanceof HTMLScriptElement && page instanceof HTMLElement
     }
 
     function chartOptions(payload) {
+        if (payload.chart === "doughnut" || payload.chart === "pie") {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: payload.chart === "doughnut" ? "62%" : 0,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "bottom",
+                        labels: { boxWidth: 10, usePointStyle: true, padding: 12 },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                return `${context.label}: ${formatMoney(context.parsed, payload.currency)}`;
+                            },
+                        },
+                    },
+                },
+            };
+        }
+
         return {
             responsive: true,
             maintainAspectRatio: false,

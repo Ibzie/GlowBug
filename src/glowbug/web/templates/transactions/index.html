@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Transactions · GlowBug{% endblock %}
+{% block content %}
+<div class="wide">
+    <div class="hero row-between">
+        <div>
+            <p class="eyebrow">Transactions</p>
+            <h1>Transactions</h1>
+            <p class="muted">{{ start }} → {{ end }}</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn-secondary" href="/subscriptions">Subscriptions</a>
+            <a class="btn btn-secondary" href="/transactions/import">Import CSV</a>
+            <a class="btn" href="/transactions/new">New transaction</a>
+        </div>
+    </div>
+
+    <form method="get" action="/transactions" class="card filter-bar">
+        <label class="field">
+            <span>Range</span>
+            <select name="range">
+                <option value="1M" {% if range_key == '1M' %}selected{% endif %}>1 month</option>
+                <option value="3M" {% if range_key == '3M' %}selected{% endif %}>3 months</option>
+                <option value="6M" {% if range_key == '6M' %}selected{% endif %}>6 months</option>
+                <option value="YTD" {% if range_key == 'YTD' %}selected{% endif %}>Year to date</option>
+                <option value="1Y" {% if range_key == '1Y' %}selected{% endif %}>1 year</option>
+                <option value="ALL" {% if range_key == 'ALL' %}selected{% endif %}>All time</option>
+            </select>
+        </label>
+        <label class="field">
+            <span>Category</span>
+            <select name="category">
+                <option value="">All categories</option>
+                {% for category in categories %}
+                    <option value="{{ category.id }}" {% if category_filter and category_filter|string == category.id|string %}selected{% endif %}>{{ category.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="checkbox-field">
+            <input type="checkbox" name="uncategorized" value="1" {% if uncategorized %}checked{% endif %}>
+            <span>Only uncategorized</span>
+        </label>
+        <button class="btn btn-secondary" type="submit">Filter</button>
+    </form>
+
+    <div class="card table-card">
+        <table>
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Account</th>
+                <th class="right">Amount</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for view in views %}
+                <tr>
+                    <td class="nowrap">{{ view.journal.date }}</td>
+                    <td>
+                        <strong>{{ view.journal.description }}</strong>
+                        <div class="muted small">{{ view.journal.type }}</div>
+                    </td>
+                    <td>
+                        {% if view.journal.category %}
+                            <span class="badge">{{ view.journal.category.name }}</span>
+                            {% if view.journal.category_source == 'memory' %}
+                                <span class="muted small">remembered</span>
+                            {% elif view.journal.category_source == 'model' %}
+                                <span class="muted small">suggested</span>
+                            {% endif %}
+                        {% else %}
+                            <form method="post" action="/transactions/{{ view.journal.id }}/category" class="inline-category">
+                                <select name="category_id" required>
+                                    <option value="">Choose…</option>
+                                    {% for category in categories %}
+                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <label class="checkbox-field compact">
+                                    <input type="checkbox" name="remember" value="1" checked>
+                                    <span>Remember</span>
+                                </label>
+                                <button class="btn btn-secondary btn-tiny" type="submit">Save</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                    <td>{{ view.account_name or '—' }}</td>
+                    <td class="right">{{ format_money(view.amount, view.currency_code, user.locale) }}</td>
+                </tr>
+            {% endfor %}
+            {% if not views %}
+                <tr>
+                    <td colspan="5" class="empty">No transactions in this range.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

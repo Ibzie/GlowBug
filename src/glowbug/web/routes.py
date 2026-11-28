@@ -33,6 +33,7 @@ from glowbug.services.accounts import (
     get_user_currencies,
     set_user_currencies,
 )
+from glowbug.services.categories import seed_default_categories
 from glowbug.services.dashboard import build_dashboard
 from glowbug.services.dashboards import (
     VALID_RANGES,
@@ -235,6 +236,7 @@ async def setup_submit(request: Request, session: SessionDep) -> HTMLResponse | 
             primary_code=primary_code,
             secondary_code=secondary_code,
         )
+        await seed_default_categories(session, user)
         await session.commit()
     except (IntegrityError, ValueError) as exc:
         await session.rollback()

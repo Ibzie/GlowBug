@@ -29,6 +29,7 @@ build/
 *.db
 media/
 backups/
+storage/imports/
 
 # Editors / OS
 .DS_Store
