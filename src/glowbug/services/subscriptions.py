@@ -166,6 +166,10 @@ async def detect_candidates(
         categories = Counter(entry["category_id"] for entry in entries if entry["category_id"] is not None)
 
         last_date = entries[-1]["date"]
+        next_due = advance_date(last_date, frequency)
+        today = date.today()
+        while next_due < today:
+            next_due = advance_date(next_due, frequency)
         candidates.append(
             SubscriptionCandidate(
                 name=descriptions.most_common(1)[0][0][:120],
@@ -173,7 +177,7 @@ async def detect_candidates(
                 amount=median_amount,
                 currency_code=entries[0]["currency"],
                 frequency=frequency,
-                next_due_date=advance_date(last_date, frequency),
+                next_due_date=next_due,
                 account_id=accounts.most_common(1)[0][0] if accounts else None,
                 category_id=categories.most_common(1)[0][0] if categories else None,
                 occurrences=len(entries),
