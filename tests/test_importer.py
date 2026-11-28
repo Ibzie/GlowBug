@@ -1,3 +1,4 @@
+import shutil
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -16,6 +17,7 @@ from glowbug.services.accounts import create_account, set_user_currencies
 from glowbug.services.categories import get_category_by_name, seed_default_categories
 from glowbug.services.importer import (
     ImportMapping,
+    _parse_layout_text,
     import_rows,
     parse_amount,
     parse_date,
@@ -88,6 +90,35 @@ def test_read_pdf_statement(tmp_path: Path) -> None:
             row = table.row()
             for value in values:
                 row.cell(value)
+    pdf.output(str(path))
+
+    headers, rows = read_statement(path)
+    assert headers[:3] == ["Date", "Description", "Amount"]
+    assert len(rows) == 2
+    assert rows[0]["Description"] == "NETFLIX"
+
+
+def test_parse_layout_text() -> None:
+    rows = _parse_layout_text("Date        Description        Amount\n2026-01-15  NETFLIX            15.99\n")
+    assert rows[0] == ["Date", "Description", "Amount"]
+    assert rows[1] == ["2026-01-15", "NETFLIX", "15.99"]
+
+
+@pytest.mark.skipif(shutil.which("pdftotext") is None, reason="pdftotext is not installed")
+def test_read_pdf_layout_fallback(tmp_path: Path) -> None:
+    path = tmp_path / "layout.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=10)
+    for values in (
+        ("Date", "Description", "Amount"),
+        ("2026-01-15", "NETFLIX", "15.99"),
+        ("2026-01-20", "COFFEE SHOP", "4.50"),
+    ):
+        pdf.cell(40, 10, values[0])
+        pdf.cell(60, 10, values[1])
+        pdf.cell(30, 10, values[2])
+        pdf.ln()
     pdf.output(str(path))
 
     headers, rows = read_statement(path)

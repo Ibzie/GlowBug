@@ -98,8 +98,11 @@ npm run build
 - After import, recurring payment patterns are detected and shown in a review
   page where you can register them as subscriptions.
 - Uploaded files are temporary and stored under `storage/imports/`.
-- PDF import is best-effort: the PDF needs selectable text and a visible table.
-  If table detection fails, export the statement as CSV or XLSX.
+- PDF import uses pdfplumber table strategies first, then Poppler's
+  `pdftotext -layout` (installed in the Docker image) to preserve statement
+  columns. It is still best-effort: the PDF needs selectable text. Scanned
+  image-only PDFs require OCR and are not supported yet. If detection fails,
+  export the statement as CSV or XLSX.
 
 ## Subscriptions
 

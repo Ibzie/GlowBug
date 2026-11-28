@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import re
+import subprocess
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -178,34 +180,128 @@ def read_xlsx(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     return _rows_to_dicts(raw_rows, header_index)
 
 
+TABLE_SETTINGS = [
+    {},
+    {
+        "vertical_strategy": "text",
+        "horizontal_strategy": "text",
+        "intersection_tolerance": 5,
+    },
+    {"vertical_strategy": "lines", "horizontal_strategy": "text"},
+    {"vertical_strategy": "text", "horizontal_strategy": "lines"},
+]
+
+
+def _table_score(table: list[list[str | None]]) -> int:
+    if not table or len(table) < 2:
+        return 0
+    header = [str(cell or "").strip().lower() for cell in table[0]]
+    joined = " ".join(header)
+    score = len(table)
+    if "date" in joined:
+        score += 15
+    if "amount" in joined or "debit" in joined or "credit" in joined:
+        score += 15
+    if "description" in joined or "details" in joined or "narrative" in joined:
+        score += 10
+    if len([cell for cell in header if cell]) >= 3:
+        score += 5
+    return score
+
+
+def _table_to_dicts(
+    table: list[list[str | None]],
+) -> tuple[list[str], list[dict[str, str]]]:
+    rows = [[_cell_to_string(cell) for cell in row] for row in table]
+    header_index = _find_header_index(rows)
+    return _rows_to_dicts(rows, header_index)
+
+
+def _parse_layout_text(text: str) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for line in text.replace("\f", "\n").splitlines():
+        if not line.strip():
+            continue
+        parts = [part.strip() for part in re.split(r"\t+| {2,}", line.strip()) if part.strip()]
+        if len(parts) >= 3:
+            rows.append(parts)
+    return rows
+
+
+def _pdftotext(path: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["pdftotext", "-layout", "-enc", "UTF-8", str(path), "-"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except OSError, subprocess.SubprocessError:
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout
+
+
 def read_pdf(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     import pdfplumber
 
+    page_tables: list[list[list[str | None]]] = []
     try:
         with pdfplumber.open(path) as pdf:
-            tables: list[list[list[str | None]]] = []
-            text_rows: list[list[str]] = []
             for page in pdf.pages:
-                for table in page.extract_tables() or []:
-                    if table and len(table) >= 2:
-                        tables.append(table)
-                text = page.extract_text() or ""
-                for line in text.splitlines():
-                    parts = [part.strip() for part in line.split("  ") if part.strip()]
-                    if len(parts) >= 3:
-                        text_rows.append(parts)
+                best_table: list[list[str | None]] | None = None
+                best_score = -1
+                for settings in TABLE_SETTINGS:
+                    for table in page.extract_tables(table_settings=settings) or []:
+                        if not table or len(table) < 2:
+                            continue
+                        score = _table_score(table)
+                        if score > best_score:
+                            best_score = score
+                            best_table = table
+                if best_table is not None:
+                    page_tables.append(best_table)
     except Exception as exc:
         raise ValueError(f"Could not read the PDF file: {exc}") from exc
 
-    if tables:
-        table = max(tables, key=len)
-        rows = [[_cell_to_string(cell) for cell in row] for row in table]
-        header_index = _find_header_index(rows)
-        return _rows_to_dicts(rows, header_index)
+    groups: dict[tuple[str, ...], tuple[list[str], list[dict[str, str]], int]] = {}
+    for table in page_tables:
+        headers, rows = _table_to_dicts(table)
+        if len(headers) < 2 or not rows:
+            continue
+        key = tuple(header.lower() for header in headers)
+        if key not in groups:
+            groups[key] = (headers, [], 0)
+        group_headers, group_rows, group_score = groups[key]
+        group_rows.extend(rows)
+        groups[key] = (group_headers, group_rows, group_score + _table_score(table))
 
-    if text_rows:
-        header_index = _find_header_index(text_rows)
-        return _rows_to_dicts(text_rows, header_index)
+    if groups:
+        headers, rows, _ = max(groups.values(), key=lambda item: (len(item[1]), item[2]))
+        return headers, rows
+
+    # Poppler's layout mode preserves statement columns better than a raw text
+    # dump. It runs as an external process, so it does not affect the
+    # free-threaded Python runtime.
+    layout_text = _pdftotext(path)
+    if layout_text:
+        rows = _parse_layout_text(layout_text)
+        if rows:
+            header_index = _find_header_index(rows)
+            return _rows_to_dicts(rows, header_index)
+
+    # Last resort: pdfplumber's layout text.
+    try:
+        with pdfplumber.open(path) as pdf:
+            combined = "\n".join(page.extract_text(layout=True) or "" for page in pdf.pages)
+        rows = _parse_layout_text(combined)
+        if rows:
+            header_index = _find_header_index(rows)
+            return _rows_to_dicts(rows, header_index)
+    except Exception as exc:
+        raise ValueError(f"Could not read the PDF file: {exc}") from exc
 
     raise ValueError(
         "Could not detect a table in this PDF. Export it as CSV or XLSX, or upload a "
